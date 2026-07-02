@@ -1,0 +1,24 @@
+package fingerprint
+
+// FNV-1a 64-bit constants.
+const (
+	fnvOffset64 = 14695981039346656037
+	fnvPrime64  = 1099511628211
+)
+
+// Sum64 returns the FNV-1a 64-bit hash of s as-is.
+func Sum64(s string) uint64 {
+	h := uint64(fnvOffset64)
+	for i := 0; i < len(s); i++ {
+		h ^= uint64(s[i])
+		h *= fnvPrime64
+	}
+	return h
+}
+
+// Fingerprint returns the FNV-1a 64-bit hash of Normalize(line). Callers that
+// already hold the normalized form can hash it with Sum64 directly:
+// Fingerprint(line) == Sum64(Normalize(line)).
+func Fingerprint(line string) uint64 {
+	return Sum64(Normalize(line))
+}
