@@ -85,8 +85,9 @@ func TestRunForwardsSignals(t *testing.T) {
 		_ = syscall.Kill(os.Getpid(), syscall.SIGTERM)
 	}()
 	start := time.Now()
+	// exec so the signal hits the process actually holding the pipes.
 	_, errOut, err := execLpi(t, nil, "run", "--db", db, "--key", "demo", "--",
-		"/bin/sh", "-c", "echo waiting; sleep 30")
+		"/bin/sh", "-c", "echo waiting; exec sleep 30")
 	require.NoError(t, err)
 	assert.Less(t, time.Since(start), 10*time.Second, "child must die from the forwarded signal")
 	assert.Equal(t, 1, *code, "signal death maps to exit code 1")
