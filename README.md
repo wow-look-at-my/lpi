@@ -25,7 +25,7 @@ lpi run --key mybuild --learn -- make -j8
 While the build runs, stderr shows a live status line:
 
 ```
-[=========>            ] 46.3%  units 65/108 (60.2%)  elapsed 3m05s  eta ~3m35s  pace 1.27x  match 98%
+[==========>           ] 46.3%  units 65/108 (60.2%)  elapsed 3m05s  eta ~3m35s  pace 1.27x  match 98%
 ```
 
 ## Modes
