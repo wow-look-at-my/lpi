@@ -40,10 +40,8 @@ func wantQuiet(t *testing.T, lines chan string, d time.Duration) {
 	t.Helper()
 	select {
 	case got, ok := <-lines:
-		if ok {
-			t.Fatalf("unexpected line %q", got)
-		}
-		t.Fatal("lines channel closed unexpectedly")
+		require.True(t, ok, "lines channel closed unexpectedly")
+		t.Fatalf("unexpected line %q", got)
 	case <-time.After(d):
 	}
 }
