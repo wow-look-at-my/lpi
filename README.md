@@ -14,11 +14,10 @@ that one slow test) are honestly represented instead of glossed over.
 ## Quickstart
 
 ```sh
-# 1. Seed a model from the log of a past completed run:
-lpi learn --key mybuild old-build.log
+# First run: no model for "mybuild" yet, so lpi records it as the baseline.
+lpi run --key mybuild --learn -- make -j8
 
-# 2. Run the task under lpi: live bar, %, ETA -- and learn from this run
-#    too when it exits 0:
+# Every run after that: live bar, %, ETA -- and keeps learning.
 lpi run --key mybuild --learn -- make -j8
 ```
 
@@ -26,6 +25,17 @@ While the build runs, stderr shows a live status line:
 
 ```
 [==========>           ] 46.3%  units 65/108 (60.2%)  elapsed 3m05s  eta ~3m35s  pace 1.27x  match 98%
+```
+
+(The bootstrap run, having nothing to compare against, shows
+`recording baseline  lines 65  elapsed 3m05s` instead.)
+
+Already have the log of a past completed run? Seed the model from it and
+get real progress on the very first wrapped run:
+
+```sh
+lpi learn --key mybuild old-build.log
+lpi run --key mybuild --learn -- make -j8
 ```
 
 ## Modes
@@ -38,9 +48,13 @@ lpi run --ref last-night.log -- cmake --build build -j
 ```
 
 Spawns the command, passes its stdout/stderr through byte-faithfully, renders
-progress on stderr, forwards Ctrl-C, and propagates the exit code. With
-`--learn` (requires `--key`) the run is saved into the model -- only when the
-command exits 0, so failed runs never pollute the reference.
+progress on stderr, forwards Ctrl-C, and propagates the exit code (a child
+killed by signal N exits 128+N, e.g. SIGTERM -> 143). With `--learn`
+(requires `--key`) the run is saved into the model -- only when the command
+exits 0, so failed runs never pollute the reference. With `--learn` and no
+`--ref`, a `--key` that has no model yet is not an error: the first run is
+recorded as the baseline (no progress bar yet), and the next invocation
+shows real progress.
 
 ### `lpi analyze` -- a partial log already on disk
 
@@ -83,10 +97,14 @@ long-job | lpi pipe --key job --learn-key job | tee job.log
 ```
 
 Forwards stdin to stdout byte-for-byte while rendering progress on stderr.
-`--learn-key K` also digests the stream and saves it under key `K` at EOF.
-Note: a pipe cannot see the upstream command's exit status, so it learns on
-EOF even if the upstream failed -- prefer `lpi run` for success-gated
-learning.
+`--learn-key K` also digests the stream and saves it under key `K` at EOF;
+when neither `--key` nor `--ref` is given it doubles as the reference key,
+and a key with no model yet records the stream as its first baseline
+instead of erroring -- so repeating `long-job | lpi pipe --learn-key job`
+bootstraps a new key just like `lpi run`. (An explicit `--key` naming a
+different key than `--learn-key` must still exist.) Note: a pipe cannot see
+the upstream command's exit status, so it learns on EOF even if the
+upstream failed -- prefer `lpi run` for success-gated learning.
 
 ### `lpi learn` / `lpi model` -- manage the reference database
 

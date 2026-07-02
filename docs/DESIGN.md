@@ -90,7 +90,10 @@ Otherwise there is no ETA (kind `"none"`). ETAs are clamped to >= 0.
 - `>= 0.9` -> `"high"`
 - `>= 0.6` -> `"medium"`
 - otherwise -> `"low"`
-- `"none"` if no lines have been observed yet
+- `"none"` if no lines have been observed yet, or if the model itself is
+  empty (`TotalUnits == 0`, the live-learning baseline recording): with
+  nothing to match against, confidence in the estimate is meaningless
+  rather than merely low
 
 Novel lines (fingerprint not in the model) and overflow lines (fingerprint
 known but its reference occurrences are exhausted) are tracked separately.
@@ -258,6 +261,12 @@ clock never moves backwards); `Elapsed = lastAt - firstAt` once both are set.
 `Progress = min(weightDone, 1)`. ETA, pace, and confidence follow the core
 algorithm rules above.
 
+An empty model (`TotalUnits == 0`, as used by the live-learning bootstrap)
+is a valid input: every line is novel, `Progress`/`UnitsPct`/`MatchRate`/
+`Pace` stay 0, `ETAKind` and `Confidence` stay `"none"`, and no snapshot
+field is ever NaN or Inf (all divisions are guarded), so the JSON output
+stays well-formed.
+
 ### internal/tailer
 
     type Tailer struct {
@@ -297,7 +306,11 @@ decimal (`match` gets none). `Summary` is the aligned multi-line block used
 by analyze and the final summaries; the ETA line carries
 `(pace 1.07x vs reference)` or `(assuming reference pace)` and is omitted
 when there is no ETA; the Reference line says `no timing data` for untimed
-models. On a TTY the Renderer repaints in place with `\r ESC[K`; otherwise
+models. Against an empty model (`UnitsTotal == 0`, baseline recording) a
+bar would be meaningless, so `StatusLine` renders
+`recording baseline  lines 1234  elapsed 2m14s` (elapsed omitted when
+unknown) and `Summary` renders a three-row block: `Reference: none yet
+(recording baseline)`, `Lines`, and `Elapsed`. On a TTY the Renderer repaints in place with `\r ESC[K`; otherwise
 it prints a line for the first update, then at most every `PlainInterval`
 or when the whole progress percent changes. `Close` always prints the final
 line.
@@ -328,18 +341,32 @@ stamps lines with parsed-or-wall-clock times.
   stderr. `--json-stream` replaces the status line with NDJSON on stderr
   (stdout is the passthrough). At EOF: summary, and `--learn-key` digests
   the run into that key -- unconditionally, since a pipe cannot see the
-  upstream exit status.
+  upstream exit status. With neither `--key` nor `--ref`, `--learn-key`
+  doubles as the reference key.
 - `run [--ref|--key] [--learn] -- CMD [ARGS...]` -- spawns CMD, passes both
   streams through, feeds one estimator (mutex-shared across both stream
   goroutines and a 500ms ticker), forwards SIGINT/SIGTERM, propagates the
-  exit code through the `osExit` seam. `--learn` (requires `--key`) saves
-  the run only on exit code 0.
+  exit code through the `osExit` seam -- 128+N when signal N killed the
+  child (shell convention; the `syscall.WaitStatus` assertion lives in
+  run.go without build tags because the type exists on every GOOS the
+  package builds on). `--learn` (requires `--key`) saves the run only on
+  exit code 0.
 - `learn --key K [--replace] LOG...` -- digests completed logs
   (gzip-transparent), prints per-log stats and the model summary.
 - `model list|show KEY|rm KEY` -- database management, honoring `--db`.
 
 Live learning re-loads the key's model from disk before saving, so ad-hoc
 `--ref` runs mixed in for matching are never persisted.
+
+Live-learning bootstrap (`resolveOrBootstrap` in refs.go): `run --learn`
+and `pipe --learn-key` treat a learn-target key with no stored model as
+"record the baseline" rather than an error, provided no `--ref` was given
+and any explicit `--key` equals the learn target (a missing `--key` naming
+a different key still errors, as does a missing `--key` combined with
+`--ref`). The mode prints `no model for key "K" yet -- recording baseline
+run` to stderr and runs the estimator against an empty model, and the run
+is digested and saved under the usual rules (run: exit 0 only; pipe: EOF),
+so the next invocation has a real reference.
 
 ## Build and test
 

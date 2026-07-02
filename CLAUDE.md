@@ -67,8 +67,15 @@ testdata/demo/         two complete fake cmake builds + a ~55% partial run,
   Tick. watch buffers up to 300 lines (or until the first tick) to decide.
 - pipe/run passthrough tees at the reader, so stdout stays byte-faithful
   even for overlong or binary lines.
-- run only learns on exit code 0 and propagates the child's exit code; pipe
-  learns on EOF unconditionally (documented caveat).
+- run only learns on exit code 0 and propagates the child's exit code
+  (128+N when signal N killed it, e.g. SIGTERM -> 143); pipe learns on EOF
+  unconditionally (documented caveat).
+- Live-learning bootstrap: a learn-target key with no model yet is NOT an
+  error for `run --learn`/`pipe --learn-key` (when no `--ref` and any
+  `--key` equals the learn key) -- the run records the baseline against an
+  empty model: progress 0, confidence "none", "recording baseline" status
+  line, and a short baseline summary. pipe's `--learn-key` doubles as the
+  reference key when `--key`/`--ref` are absent.
 
 ## Testing seams (package vars)
 
