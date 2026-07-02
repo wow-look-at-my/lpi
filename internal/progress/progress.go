@@ -47,7 +47,10 @@ type Estimator struct {
 	lastAt     time.Time
 }
 
-// NewEstimator returns an Estimator matching against m.
+// NewEstimator returns an Estimator matching against m. An empty model
+// (TotalUnits 0, as used by the live-learning baseline recording) is valid:
+// every line counts as novel, Progress and UnitsPct stay 0, ETAKind and
+// Confidence stay "none", and no field ever becomes NaN or Inf.
 func NewEstimator(m *model.Model) *Estimator {
 	return &Estimator{m: m, seen: make(map[uint64]int)}
 }
@@ -133,7 +136,13 @@ func (e *Estimator) Snapshot() Snapshot {
 	if e.current > 0 {
 		s.MatchRate = float64(e.matched) / float64(e.current)
 	}
-	s.Confidence = confidence(e.current, s.MatchRate)
+	if s.UnitsTotal == 0 {
+		// An empty model (baseline recording) has nothing to match against,
+		// so confidence in the estimate is meaningless rather than low.
+		s.Confidence = "none"
+	} else {
+		s.Confidence = confidence(e.current, s.MatchRate)
+	}
 	return s
 }
 

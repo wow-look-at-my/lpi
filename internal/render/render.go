@@ -99,7 +99,21 @@ func Bar(frac float64, width int) string {
 //
 // The elapsed segment is omitted when elapsed time is unknown, the eta
 // segment when there is no ETA, and the pace segment when pace is 0.
+// Against an empty reference model (units total 0: a live-learning run
+// recording the first baseline) the bar would be meaningless, so a
+// recording status is shown instead, e.g.
+//
+//	recording baseline  lines 1234  elapsed 2m14s
+//
+// again with the elapsed segment omitted when unknown.
 func StatusLine(s progress.Snapshot) string {
+	if s.UnitsTotal == 0 {
+		parts := []string{"recording baseline", fmt.Sprintf("lines %d", s.CurrentLines)}
+		if s.ElapsedKnown {
+			parts = append(parts, "elapsed "+Duration(s.Elapsed))
+		}
+		return strings.Join(parts, "  ")
+	}
 	parts := []string{
 		Bar(s.Progress, barWidth) + fmt.Sprintf(" %.1f%%", s.Progress*100),
 		fmt.Sprintf("units %d/%d (%.1f%%)", s.UnitsDone, s.UnitsTotal, s.UnitsPct*100),
@@ -118,11 +132,23 @@ func StatusLine(s progress.Snapshot) string {
 }
 
 // Summary renders the multi-line, aligned summary block. It ends with a
-// newline.
+// newline. Against an empty reference model there is nothing to estimate,
+// so a short block notes that the run was recorded as the baseline (line
+// count and elapsed time) instead.
 func Summary(s progress.Snapshot) string {
 	var b strings.Builder
 	row := func(key, val string) {
 		fmt.Fprintf(&b, "%-12s %s\n", key+":", val)
+	}
+	if s.UnitsTotal == 0 {
+		row("Reference", "none yet (recording baseline)")
+		row("Lines", fmt.Sprintf("%d", s.CurrentLines))
+		if s.ElapsedKnown {
+			row("Elapsed", Duration(s.Elapsed))
+		} else {
+			row("Elapsed", "unknown")
+		}
+		return b.String()
 	}
 	row("Progress", fmt.Sprintf("%.1f%% (%s)", s.Progress*100, progressBasis(s)))
 	row("Units", fmt.Sprintf("%d / %d reference lines matched (%.1f%%)",

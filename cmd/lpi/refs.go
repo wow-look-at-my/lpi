@@ -77,6 +77,32 @@ func (rf *refFlags) resolve() (*model.Model, error) {
 	return m, nil
 }
 
+// resolveOrBootstrap resolves the reference model for a live-learning mode,
+// where learnKey is the key the run will be saved into. It behaves exactly
+// like resolve except for the bootstrap case: when no --ref is given and
+// the reference key -- --key when set, else learnKey -- is the learn target
+// itself but has no stored model yet, it returns a fresh empty model and
+// bootstrap=true instead of an error. The caller then records the run as
+// the key's first baseline, so the next invocation has a real reference.
+// An explicit --key naming a different key than learnKey must still exist,
+// as must --key whenever a --ref is also given.
+func (rf *refFlags) resolveOrBootstrap(learnKey string) (m *model.Model, bootstrap bool, err error) {
+	if len(rf.refs) > 0 || (rf.key != "" && rf.key != learnKey) {
+		m, err = rf.resolve()
+		return m, false, err
+	}
+	m, err = model.Load(model.PathForKey(rf.db, learnKey))
+	if os.IsNotExist(err) {
+		return model.New(learnKey), true, nil
+	}
+	return m, false, err
+}
+
+// bootstrapNotice tells the user why no progress will be shown this run.
+func bootstrapNotice(w io.Writer, key string) {
+	fmt.Fprintf(w, "no model for key %q yet -- recording baseline run\n", key)
+}
+
 // availableKeys names the models present in db, for error messages.
 func availableKeys(db string) string {
 	entries, err := os.ReadDir(db)

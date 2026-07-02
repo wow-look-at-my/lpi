@@ -90,6 +90,41 @@ func TestStatusLineRefPace(t *testing.T) {
 	assert.Equal(t, want, StatusLine(s))
 }
 
+// baselineSnap is what the estimator produces while recording a baseline
+// against an empty model.
+func baselineSnap() progress.Snapshot {
+	return progress.Snapshot{
+		Elapsed:      134 * time.Second,
+		ElapsedKnown: true,
+		ETAKind:      "none",
+		Confidence:   "none",
+		CurrentLines: 1234,
+		NovelLines:   1234,
+	}
+}
+
+func TestStatusLineRecordingBaseline(t *testing.T) {
+	s := baselineSnap()
+	assert.Equal(t, "recording baseline  lines 1234  elapsed 2m14s", StatusLine(s))
+
+	s.ElapsedKnown = false
+	assert.Equal(t, "recording baseline  lines 1234", StatusLine(s))
+}
+
+func TestSummaryRecordingBaseline(t *testing.T) {
+	s := baselineSnap()
+	want := "Reference:   none yet (recording baseline)\n" +
+		"Lines:       1234\n" +
+		"Elapsed:     2m14s\n"
+	assert.Equal(t, want, Summary(s))
+
+	s.ElapsedKnown = false
+	want = "Reference:   none yet (recording baseline)\n" +
+		"Lines:       1234\n" +
+		"Elapsed:     unknown\n"
+	assert.Equal(t, want, Summary(s))
+}
+
 func TestSummaryFull(t *testing.T) {
 	want := "Progress:    38.4% (time-weighted)\n" +
 		"Units:       2451 / 5948 reference lines matched (41.2%)\n" +

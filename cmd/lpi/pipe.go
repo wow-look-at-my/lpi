@@ -29,21 +29,42 @@ shows live progress on stderr, e.g.:
 
 With --json-stream, NDJSON snapshots replace the human status line on stderr
 (stdout stays the byte-faithful passthrough). With --learn-key, the stream
-is also digested and saved under that key when stdin ends. Note that pipe
-cannot see the upstream command's exit status, so it learns on EOF even if
-the upstream failed -- prefer 'lpi run', which only learns from exit code 0.`,
+is also digested and saved under that key when stdin ends.
+
+When neither --key nor --ref is given, --learn-key doubles as the reference
+key; and when that key -- named by --key or defaulted this way -- has no
+model yet, the stream is recorded as the key's first baseline instead of
+erroring (no progress can be shown yet). An explicit --key naming a
+different key than --learn-key must still exist, as must --key whenever a
+--ref is also given.
+
+Note that pipe cannot see the upstream command's exit status, so it learns
+on EOF even if the upstream failed -- prefer 'lpi run', which only learns
+from exit code 0.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		m, err := pipeOpts.rf.resolve()
+		var (
+			m         *model.Model
+			bootstrap bool
+			err       error
+		)
+		if pipeOpts.learnKey != "" {
+			m, bootstrap, err = pipeOpts.rf.resolveOrBootstrap(pipeOpts.learnKey)
+		} else {
+			m, err = pipeOpts.rf.resolve()
+		}
 		if err != nil {
 			return err
+		}
+		errW := cmd.ErrOrStderr()
+		if bootstrap {
+			bootstrapNotice(errW, pipeOpts.learnKey)
 		}
 		est := progress.NewEstimator(m)
 		var dig *model.Digester
 		if pipeOpts.learnKey != "" {
 			dig = model.NewDigester(sourceName("pipe", nil), nil)
 		}
-		errW := cmd.ErrOrStderr()
 		var r *render.Renderer
 		if !pipeOpts.jsonStream {
 			r = render.New(errW)
@@ -91,7 +112,7 @@ the upstream failed -- prefer 'lpi run', which only learns from exit code 0.`,
 func init() {
 	addRefFlags(pipeCmd, &pipeOpts.rf)
 	pipeCmd.Flags().StringVar(&pipeOpts.learnKey, "learn-key", "",
-		"also digest the stream and save it under this key at EOF")
+		"also digest the stream and save it under this key at EOF (doubles as the reference key when --key/--ref are absent)")
 	pipeCmd.Flags().BoolVar(&pipeOpts.jsonStream, "json-stream", false,
 		"emit NDJSON snapshots to stderr instead of the status line")
 	rootCmd.AddCommand(pipeCmd)

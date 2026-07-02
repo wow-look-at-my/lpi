@@ -32,9 +32,15 @@ and shows live progress on stderr, e.g.:
 
   lpi run --key mybuild --learn -- make -j8
 
-The command's exit code is propagated. With --learn (requires --key), the
-run is digested and saved into the key's model -- but only when the command
-exits 0, so failed runs never pollute the reference.`,
+The command's exit code is propagated; a child killed by signal N exits
+128+N, following the shell convention (SIGTERM -> 143). With --learn
+(requires --key), the run is digested and saved into the key's model -- but
+only when the command exits 0, so failed runs never pollute the reference.
+
+With --learn and no --ref, a --key that has no model yet is not an error:
+the first run is recorded as the key's baseline (no progress can be shown
+yet) and the next invocation gets a real estimate. With a --ref, a missing
+--key still errors.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if cmd.ArgsLenAtDash() < 0 {
 			return errors.New("missing '--': usage is lpi run [flags] -- CMD [ARGS...]")
@@ -48,9 +54,23 @@ exits 0, so failed runs never pollute the reference.`,
 		if runOpts.learn && runOpts.rf.key == "" {
 			return errors.New("--learn requires --key (the model to save the run into)")
 		}
-		m, err := runOpts.rf.resolve()
+		var (
+			m         *model.Model
+			bootstrap bool
+			err       error
+		)
+		if runOpts.learn {
+			// The run will be recorded anyway, so a missing key just means
+			// this run becomes the baseline instead of being estimated.
+			m, bootstrap, err = runOpts.rf.resolveOrBootstrap(runOpts.rf.key)
+		} else {
+			m, err = runOpts.rf.resolve()
+		}
 		if err != nil {
 			return err
+		}
+		if bootstrap {
+			bootstrapNotice(cmd.ErrOrStderr(), runOpts.rf.key)
 		}
 		lv := &liveRun{est: progress.NewEstimator(m), r: render.New(cmd.ErrOrStderr())}
 		if runOpts.learn {
@@ -165,12 +185,26 @@ func (lv *liveRun) execute(cmd *cobra.Command, args []string) (int, error) {
 		if !errors.As(waitErr, &ee) {
 			return 0, waitErr
 		}
-		if code := ee.ExitCode(); code > 0 {
-			return code, nil
-		}
-		return 1, nil // killed by a signal
+		return childExitCode(ee), nil
 	}
 	return 0, nil
+}
+
+// childExitCode maps the child's ExitError to the code lpi propagates: the
+// child's own exit code, or 128+N when signal N killed it (the shell
+// convention: SIGTERM -> 143). The syscall.WaitStatus assertion is kept in
+// this one file rather than behind build tags because the type exists on
+// every GOOS this package already builds on (it requires syscall.SIGTERM
+// above); non-Unix implementations simply report Signaled() == false and
+// fall through to the generic path.
+func childExitCode(ee *exec.ExitError) int {
+	if ws, ok := ee.ProcessState.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+		return 128 + int(ws.Signal())
+	}
+	if code := ee.ExitCode(); code > 0 {
+		return code
+	}
+	return 1
 }
 
 // consume forwards one child stream byte-faithfully (the tee sits at the
@@ -205,6 +239,6 @@ func (lw *lockedWriter) Write(p []byte) (int, error) {
 func init() {
 	addRefFlags(runCmd, &runOpts.rf)
 	runCmd.Flags().BoolVar(&runOpts.learn, "learn", false,
-		"digest the run and save it into --key's model when CMD exits 0")
+		"digest the run and save it into --key's model when CMD exits 0 (a key with no model yet records the baseline)")
 	rootCmd.AddCommand(runCmd)
 }

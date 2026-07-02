@@ -2,6 +2,7 @@ package progress
 
 import (
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -202,4 +203,38 @@ func TestEmptyModelEverythingNovel(t *testing.T) {
 	assert.Zero(t, s.UnitsPct)
 	assert.Zero(t, s.Progress)
 	assert.Equal(t, "none", s.ETAKind)
+	assert.Equal(t, "none", s.Confidence, "an empty model has nothing to be confident about")
+}
+
+// TestEmptyModelSnapshotStaysFinite pins the baseline-recording state: an
+// estimator over an empty model (as used by the live-learning bootstrap)
+// must keep every field sane and never emit NaN or Inf, even with a live
+// clock running.
+func TestEmptyModelSnapshotStaysFinite(t *testing.T) {
+	e := NewEstimator(model.New("empty"))
+	e.Observe("first baseline line", refBase)
+	e.Observe("second baseline line", refBase.Add(3*time.Second))
+	e.Tick(refBase.Add(10 * time.Second))
+
+	s := e.Snapshot()
+	assert.Zero(t, s.Progress)
+	assert.Zero(t, s.UnitsDone)
+	assert.Zero(t, s.UnitsTotal)
+	assert.Zero(t, s.UnitsPct)
+	assert.Zero(t, s.MatchRate)
+	assert.Zero(t, s.Pace)
+	assert.Zero(t, s.ETA)
+	assert.Equal(t, "none", s.ETAKind)
+	assert.Equal(t, "none", s.Confidence)
+	require.True(t, s.ElapsedKnown)
+	assert.Equal(t, 10*time.Second, s.Elapsed)
+	assert.Equal(t, 2, s.CurrentLines)
+	assert.Equal(t, 2, s.NovelLines)
+	for name, v := range map[string]float64{
+		"Progress": s.Progress, "UnitsPct": s.UnitsPct,
+		"MatchRate": s.MatchRate, "Pace": s.Pace,
+	} {
+		assert.False(t, math.IsNaN(v), "%s must not be NaN", name)
+		assert.False(t, math.IsInf(v, 0), "%s must not be Inf", name)
+	}
 }
