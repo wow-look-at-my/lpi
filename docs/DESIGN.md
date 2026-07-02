@@ -258,11 +258,88 @@ clock never moves backwards); `Elapsed = lastAt - firstAt` once both are set.
 `Progress = min(weightDone, 1)`. ETA, pace, and confidence follow the core
 algorithm rules above.
 
+### internal/tailer
+
+    type Tailer struct {
+        Path      string
+        FromStart bool          // read pre-existing content first
+        Interval  time.Duration // poll interval, default 150ms if zero
+    }
+    func (t *Tailer) Run(ctx context.Context, lines chan<- string) error
+
+Polling follower. It waits for the file to exist, reads appended data,
+detects truncation (size below the read offset -> rewind to 0) and rotation
+(the path resolves to a different file per `os.SameFile`, or disappears ->
+reopen the new file from 0). `FromStart=false` skips only content that
+existed at start; a file that appears later is read from 0. Line splitting
+is not reimplemented: all bytes are pumped through an `io.Pipe` into a
+`linescan.Scanner` (same 1 MiB cap and `\r` semantics), so a partial final
+line is held until its newline arrives. `Run` closes `lines` before
+returning; it returns nil when ctx is done and the error on hard failures.
+An undelivered trailing partial line is dropped at shutdown.
+
+### internal/render
+
+    var PlainInterval = 2 * time.Second        // seam for tests
+    var IsTTY = func(w io.Writer) bool { ... } // *os.File char-device check
+    type Renderer struct{ ... }
+    func New(w io.Writer) *Renderer
+    func (r *Renderer) Update(s progress.Snapshot)
+    func (r *Renderer) Close(final progress.Snapshot)
+    func Bar(frac float64, width int) string
+    func StatusLine(s progress.Snapshot) string
+    func Summary(s progress.Snapshot) string
+
+`StatusLine` is the single-line live status (bar, %, units, elapsed, eta,
+pace, match); the elapsed/eta/pace segments are omitted when unknown.
+Durations round to seconds: `47s`, `12m34s`, `1h02m`. Percentages get one
+decimal (`match` gets none). `Summary` is the aligned multi-line block used
+by analyze and the final summaries; the ETA line carries
+`(pace 1.07x vs reference)` or `(assuming reference pace)` and is omitted
+when there is no ETA; the Reference line says `no timing data` for untimed
+models. On a TTY the Renderer repaints in place with `\r ESC[K`; otherwise
+it prints a line for the first update, then at most every `PlainInterval`
+or when the whole progress percent changes. `Close` always prints the final
+line.
+
 ### cmd/lpi
 
-Cobra CLI, binary name `lpi`. This part ships only the root command with a
-`version` variable wired in; subcommands (`analyze`, `watch`, `pipe`, `run`,
-`learn`, `model`), the tailer, and the renderer come in a later stage.
+Cobra CLI, binary name `lpi`; one self-registering command per file.
+`refs.go` holds the shared pieces: `--ref`/`--key`/`--db` resolution (a key
+loads from the database -- with a clear error listing available keys -- and
+each `--ref` is digested and added in memory on top), the pinned JSON
+snapshot type used by `--json`/`--json-stream` (`eta_seconds` absent when
+there is no ETA; `units_pct` is a percentage), and the `lineFeeder` that
+stamps lines with parsed-or-wall-clock times.
+
+- `analyze [--ref|--key] CURRENT.log [--json]` -- `-` reads stdin; buffers
+  up to 300 lines for `timeparse.Detect`, then streams everything through
+  the estimator (carry-forward for unparsable lines).
+- `watch [--ref|--key] FILE [--from-start] [--interval] [--json-stream]` --
+  tails via the tailer (FromStart defaults to true: the history is the
+  estimate). The time source is decided once, from the first up-to-300
+  lines (or whatever arrived by the first 500ms tick): the log's own
+  timestamps if detected, else wall clock with a periodic `Tick` -- never a
+  mix. Renders per line batch and at least every 500ms; `--json-stream`
+  emits NDJSON to stdout per repaint. SIGINT/SIGTERM -> final summary,
+  exit 0.
+- `pipe [--ref|--key] [--learn-key K] [--json-stream]` -- stdin to stdout
+  byte-faithfully (the tee sits at the reader), wall-clock estimation to
+  stderr. `--json-stream` replaces the status line with NDJSON on stderr
+  (stdout is the passthrough). At EOF: summary, and `--learn-key` digests
+  the run into that key -- unconditionally, since a pipe cannot see the
+  upstream exit status.
+- `run [--ref|--key] [--learn] -- CMD [ARGS...]` -- spawns CMD, passes both
+  streams through, feeds one estimator (mutex-shared across both stream
+  goroutines and a 500ms ticker), forwards SIGINT/SIGTERM, propagates the
+  exit code through the `osExit` seam. `--learn` (requires `--key`) saves
+  the run only on exit code 0.
+- `learn --key K [--replace] LOG...` -- digests completed logs
+  (gzip-transparent), prints per-log stats and the model summary.
+- `model list|show KEY|rm KEY` -- database management, honoring `--db`.
+
+Live learning re-loads the key's model from disk before saving, so ad-hoc
+`--ref` runs mixed in for matching are never persisted.
 
 ## Build and test
 
