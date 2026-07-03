@@ -1,0 +1,107 @@
+09:30:00 -- The C compiler identification is GNU 13.2.0
+09:30:01 -- Detecting C compiler ABI info
+09:30:02 -- Detecting C compiler ABI info - done
+09:30:02 -- Check for working C compiler: /usr/bin/cc - skipped
+09:30:02 -- Detecting C compile features
+09:30:03 -- Detecting C compile features - done
+09:30:04 -- Found Threads: TRUE
+09:30:04 -- Found ZLIB: /usr/lib/x86_64-linux-gnu/libz.so (found version "1.3")
+09:30:05 -- Looking for pthread_create in pthread - found
+09:30:05 -- Configuring done (2.1s)
+09:30:06 -- Generating done (0.3s)
+09:30:07 -- Build files have been written to: /home/dev/widget/build
+09:30:09 [  1%] Building C object src/core/CMakeFiles/core.dir/alloc.c.o
+09:30:10 [  2%] Building C object src/core/CMakeFiles/core.dir/buffer.c.o
+09:30:13 [  3%] Building C object src/core/CMakeFiles/core.dir/cache.c.o
+src/core/cache.c: In function 'cache_evict':
+src/core/cache.c:143:13: warning: unused variable 'tmp' [-Wunused-variable]
+09:30:15 [  4%] Building C object src/core/CMakeFiles/core.dir/config.c.o
+09:30:18 [  5%] Building C object src/core/CMakeFiles/core.dir/crypto.c.o
+09:30:20 [  6%] Building C object src/core/CMakeFiles/core.dir/decode.c.o
+09:30:23 [  7%] Building C object src/core/CMakeFiles/core.dir/encode.c.o
+09:30:24 [  8%] Building C object src/core/CMakeFiles/core.dir/engine.c.o
+09:30:29 [  9%] Building C object src/core/CMakeFiles/core.dir/error.c.o
+09:30:33 [ 10%] Building C object src/core/CMakeFiles/core.dir/file.c.o
+09:30:35 [ 11%] Building C object src/core/CMakeFiles/core.dir/event.c.o
+09:30:39 [ 13%] Building C object src/core/CMakeFiles/core.dir/filter.c.o
+09:30:43 [ 14%] Building C object src/core/CMakeFiles/core.dir/heap.c.o
+09:30:47 [ 15%] Building C object src/core/CMakeFiles/core.dir/hashmap.c.o
+09:30:50 [ 16%] Building C object src/core/CMakeFiles/core.dir/index.c.o
+09:30:55 [ 17%] Building C object src/core/CMakeFiles/core.dir/json.c.o
+09:30:57 [ 18%] Building C object src/core/CMakeFiles/core.dir/input.c.o
+09:31:00 [ 19%] Building C object src/core/CMakeFiles/core.dir/lexer.c.o
+09:31:02 [ 20%] Building C object src/core/CMakeFiles/core.dir/mapper.c.o
+09:31:05 [ 21%] Building C object src/core/CMakeFiles/core.dir/memory.c.o
+09:31:06 [ 22%] Building C object src/core/CMakeFiles/core.dir/logging.c.o
+09:31:07 [ 23%] Building C object src/core/CMakeFiles/core.dir/matrix.c.o
+09:31:11 [ 25%] Building C object src/core/CMakeFiles/core.dir/output.c.o
+09:31:15 [ 26%] Building C object src/core/CMakeFiles/core.dir/mutex.c.o
+09:31:20 [ 27%] Building C object src/core/CMakeFiles/core.dir/path.c.o
+09:31:22 [ 28%] Building C object src/core/CMakeFiles/core.dir/parser.c.o
+09:31:26 [ 29%] Building C object src/core/CMakeFiles/core.dir/proto.c.o
+09:31:28 [ 30%] Building C object src/core/CMakeFiles/core.dir/pool.c.o
+09:31:31 [ 31%] Linking C static library libcore.a
+09:31:37 [ 32%] Building C object src/net/CMakeFiles/net.dir/reader.c.o
+09:31:38 [ 33%] Building C object src/net/CMakeFiles/net.dir/queue.c.o
+09:31:39 [ 34%] Building C object src/net/CMakeFiles/net.dir/ring.c.o
+09:31:44 [ 35%] Building C object src/net/CMakeFiles/net.dir/socket.c.o
+09:31:45 [ 36%] Building C object src/net/CMakeFiles/net.dir/scanner.c.o
+09:31:47 [ 38%] Building C object src/net/CMakeFiles/net.dir/sorter.c.o
+09:31:49 [ 39%] Building C object src/net/CMakeFiles/net.dir/stack.c.o
+09:31:53 [ 40%] Building C object src/net/CMakeFiles/net.dir/stream.c.o
+09:31:56 [ 41%] Building C object src/net/CMakeFiles/net.dir/strings.c.o
+09:31:58 [ 42%] Building C object src/net/CMakeFiles/net.dir/task.c.o
+09:31:59 [ 43%] Building C object src/net/CMakeFiles/net.dir/table.c.o
+09:32:00 [ 44%] Building C object src/net/CMakeFiles/net.dir/thread.c.o
+09:32:02 [ 45%] Building C object src/net/CMakeFiles/net.dir/timer.c.o
+09:32:05 [ 46%] Building C object src/net/CMakeFiles/net.dir/token.c.o
+09:32:09 [ 47%] Building C object src/net/CMakeFiles/net.dir/tree.c.o
+09:32:10 [ 48%] Building C object src/net/CMakeFiles/net.dir/url.c.o
+09:32:12 [ 50%] Building C object src/net/CMakeFiles/net.dir/vector.c.o
+09:32:14 [ 51%] Building C object src/net/CMakeFiles/net.dir/utf8.c.o
+09:32:15 [ 52%] Building C object src/net/CMakeFiles/net.dir/walk.c.o
+09:32:17 [ 53%] Building C object src/net/CMakeFiles/net.dir/worker.c.o
+09:32:18 [ 54%] Building C object src/net/CMakeFiles/net.dir/writer.c.o
+09:32:22 [ 55%] Building C object src/net/CMakeFiles/net.dir/xml.c.o
+09:32:24 [ 56%] Building C object src/net/CMakeFiles/net.dir/zip.c.o
+09:32:26 [ 57%] Building C object src/net/CMakeFiles/net.dir/quic.c.o
+09:32:28 [ 58%] Building C object src/net/CMakeFiles/net.dir/http.c.o
+09:32:33 [ 59%] Linking C static library libnet.a
+09:32:42 [ 60%] Building C object src/util/CMakeFiles/util.dir/dns.c.o
+09:32:46 [ 61%] Building C object src/util/CMakeFiles/util.dir/tls.c.o
+09:32:47 [ 63%] Building C object src/util/CMakeFiles/util.dir/tcp.c.o
+09:32:50 [ 64%] Building C object src/util/CMakeFiles/util.dir/ipc.c.o
+09:32:54 [ 65%] Building C object src/util/CMakeFiles/util.dir/udp.c.o
+09:32:57 [ 66%] Building C object src/util/CMakeFiles/util.dir/rpc.c.o
+09:33:02 [ 67%] Building C object src/util/CMakeFiles/util.dir/auth.c.o
+09:33:04 [ 68%] Building C object src/util/CMakeFiles/util.dir/route.c.o
+09:33:07 [ 69%] Building C object src/util/CMakeFiles/util.dir/cookie.c.o
+09:33:11 [ 70%] Building C object src/util/CMakeFiles/util.dir/session.c.o
+09:33:12 [ 71%] Building C object src/util/CMakeFiles/util.dir/render.c.o
+09:33:16 [ 72%] Building C object src/util/CMakeFiles/util.dir/view.c.o
+09:33:17 [ 73%] Building C object src/util/CMakeFiles/util.dir/model.c.o
+09:33:21 [ 75%] Building C object src/util/CMakeFiles/util.dir/ctrl.c.o
+09:33:25 [ 76%] Building C object src/util/CMakeFiles/util.dir/api.c.o
+09:33:29 [ 77%] Building C object src/util/CMakeFiles/util.dir/cliargs.c.o
+09:33:30 [ 78%] Building C object src/util/CMakeFiles/util.dir/env.c.o
+09:33:33 [ 79%] Building C object src/util/CMakeFiles/util.dir/signal.c.o
+09:33:37 [ 80%] Building C object src/util/CMakeFiles/util.dir/tracing.c.o
+09:33:39 [ 81%] Building C object src/util/CMakeFiles/util.dir/proc.c.o
+09:33:41 [ 82%] Building C object src/util/CMakeFiles/util.dir/pipe.c.o
+09:33:43 [ 83%] Linking C static library libutil.a
+09:33:54 [ 84%] Building C object src/app/CMakeFiles/app.dir/term.c.o
+09:33:55 [ 85%] Building C object src/app/CMakeFiles/app.dir/format.c.o
+09:33:59 [ 86%] Building C object src/app/CMakeFiles/app.dir/color.c.o
+09:34:01 [ 88%] Building C object src/app/CMakeFiles/app.dir/random.c.o
+09:34:06 [ 89%] Building C object src/app/CMakeFiles/app.dir/uuid.c.o
+09:34:08 [ 90%] Building C object src/app/CMakeFiles/app.dir/cache.c.o
+09:34:12 [ 91%] Building C object src/app/CMakeFiles/app.dir/compress.c.o
+09:34:14 [ 92%] Building C object src/app/CMakeFiles/app.dir/crypto.c.o
+09:34:19 [ 93%] Building C object src/app/CMakeFiles/app.dir/alloc.c.o
+09:34:22 [ 94%] Building C object src/app/CMakeFiles/app.dir/buffer.c.o
+09:34:24 [ 95%] Building C object src/app/CMakeFiles/app.dir/decode.c.o
+09:34:26 [ 96%] Building C object src/app/CMakeFiles/app.dir/config.c.o
+09:34:27 [ 97%] Building C object src/app/CMakeFiles/app.dir/encode.c.o
+09:34:31 [ 98%] Linking C static library libapp.a
+09:35:11 [100%] Linking C executable widget
+09:35:14 -- Build complete: 92 targets
