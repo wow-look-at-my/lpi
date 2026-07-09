@@ -20,25 +20,41 @@ type envelope struct {
 }
 
 // Save writes the model as a gzip-compressed gob envelope, creating parent
-// directories as needed.
+// directories as needed. The write is atomic: the envelope goes to a temp
+// file in the same directory which is renamed over the target only once it
+// is complete, so a crash or full disk mid-save can never destroy the
+// existing model or leave a truncated file that bricks the key.
 func (m *Model) Save(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	f, err := os.Create(path)
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp*")
 	if err != nil {
 		return err
 	}
+	if err := writeEnvelope(tmp, m); err != nil {
+		tmp.Close()
+		os.Remove(tmp.Name())
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmp.Name())
+		return err
+	}
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		os.Remove(tmp.Name())
+		return err
+	}
+	return nil
+}
+
+// writeEnvelope encodes the model onto f as gzipped gob.
+func writeEnvelope(f *os.File, m *Model) error {
 	gz := gzip.NewWriter(f)
 	if err := gob.NewEncoder(gz).Encode(envelope{Version: currentVersion, Key: m.Key, Runs: m.Runs}); err != nil {
-		f.Close()
 		return err
 	}
-	if err := gz.Close(); err != nil {
-		f.Close()
-		return err
-	}
-	return f.Close()
+	return gz.Close()
 }
 
 // Load reads a model written by Save, rejecting unknown versions, and
@@ -88,6 +104,12 @@ func DefaultDir() string {
 // sanitized to [A-Za-z0-9._-] (any other byte becomes '_', an empty result
 // becomes "default") and ".lpi" is appended.
 func PathForKey(dir, key string) string {
+	return filepath.Join(dir, sanitizeKey(key)+".lpi")
+}
+
+// sanitizeKey maps a model key to a safe file-name fragment: bytes outside
+// [A-Za-z0-9._-] become '_', and an empty result becomes "default".
+func sanitizeKey(key string) string {
 	san := make([]byte, 0, len(key))
 	for i := 0; i < len(key); i++ {
 		if isSafeKeyByte(key[i]) {
@@ -99,7 +121,7 @@ func PathForKey(dir, key string) string {
 	if len(san) == 0 {
 		san = append(san, "default"...)
 	}
-	return filepath.Join(dir, string(san)+".lpi")
+	return string(san)
 }
 
 func isSafeKeyByte(c byte) bool {

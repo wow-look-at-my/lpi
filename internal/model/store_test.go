@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -83,6 +84,59 @@ func TestSaveErrors(t *testing.T) {
 		err := New("k").Save(dir)
 		assert.Error(t, err)
 	})
+}
+
+// TestSaveFailureLeavesExistingModelIntact pins the atomic-save guarantee.
+// The target name is a valid path, but the temp file's longer name exceeds
+// the Linux NAME_MAX of 255 bytes, so the save fails before touching the
+// target -- the pre-existing model must survive byte-identical. (The env
+// runs as root, so permission-based failures cannot be used here.)
+func TestSaveFailureLeavesExistingModelIntact(t *testing.T) {
+	dir := t.TempDir()
+	base := strings.Repeat("k", 246) + ".lpi" // 250 bytes: valid target, oversize temp
+	path := filepath.Join(dir, base)
+
+	m := New("k")
+	m.AddRun(digestAt(t, "r1", []string{"alpha", "beta"}, []time.Duration{0, time.Second}))
+	good := filepath.Join(dir, "good.lpi")
+	require.NoError(t, m.Save(good))
+	before, err := os.ReadFile(good)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, before, 0o644), "seed the existing model directly")
+
+	m2 := New("k")
+	m2.AddRun(digestAt(t, "r2", []string{"gamma", "delta", "epsilon"},
+		[]time.Duration{0, time.Second, 2 * time.Second}))
+	require.Error(t, m2.Save(path), "the temp file name exceeds NAME_MAX, so the save must fail")
+
+	after, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, before, after, "a failed save must leave the existing model byte-identical")
+	got, err := Load(path)
+	require.NoError(t, err, "the existing model must still load")
+	assert.Len(t, got.Runs, 1)
+}
+
+// TestSaveFailedRenameKeepsTargetAndLeavesNoLitter drives Save through a
+// failing final rename (the target is a non-empty directory) and checks the
+// target's contents survive and no temp file is left behind.
+func TestSaveFailedRenameKeepsTargetAndLeavesNoLitter(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "k.lpi")
+	require.NoError(t, os.MkdirAll(target, 0o755))
+	inner := filepath.Join(target, "keep")
+	require.NoError(t, os.WriteFile(inner, []byte("precious"), 0o644))
+
+	m := New("k")
+	m.AddRun(digestAt(t, "r1", []string{"alpha", "beta"}, []time.Duration{0, time.Second}))
+	require.Error(t, m.Save(target), "renaming a file over a directory must fail")
+
+	data, err := os.ReadFile(inner)
+	require.NoError(t, err)
+	assert.Equal(t, "precious", string(data), "the failed save must not clobber the target")
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	assert.Len(t, entries, 1, "no temp litter after a failed save")
 }
 
 func TestDefaultDirPrecedence(t *testing.T) {
