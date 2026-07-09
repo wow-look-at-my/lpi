@@ -20,8 +20,9 @@ import (
 )
 
 var runOpts struct {
-	rf    refFlags
-	learn bool
+	rf             refFlags
+	learn          bool
+	learnOnFailure bool
 }
 
 var runCmd = &cobra.Command{
@@ -37,6 +38,14 @@ The command's exit code is propagated; a child killed by signal N exits
 (requires --key), the run is digested and saved into the key's model -- but
 only when the command exits 0, so failed runs never pollute the reference.
 
+A learning run also streams every consumed line to a capture file under
+<db>/pending/ as it goes. When the run is learned the file is removed; when
+the command fails (or the save fails) the file is kept and the exact
+'lpi learn' command to recover it is printed, so a long run is never lost
+to a final-moment failure. --learn-on-failure (implies --learn) saves the
+run into the model even on a non-zero exit -- use it when a failed run's
+log is still a representative reference.
+
 With --learn and no --ref, a --key that has no model yet is not an error:
 the first run is recorded as the key's baseline (no progress can be shown
 yet) and the next invocation gets a real estimate. With a --ref, a missing
@@ -51,7 +60,8 @@ yet) and the next invocation gets a real estimate. With a --ref, a missing
 		if len(args) == 0 {
 			return errors.New("no command given after '--'")
 		}
-		if runOpts.learn && runOpts.rf.key == "" {
+		learning := runOpts.learn || runOpts.learnOnFailure
+		if learning && runOpts.rf.key == "" {
 			return errors.New("--learn requires --key (the model to save the run into)")
 		}
 		var (
@@ -59,7 +69,7 @@ yet) and the next invocation gets a real estimate. With a --ref, a missing
 			bootstrap bool
 			err       error
 		)
-		if runOpts.learn {
+		if learning {
 			// The run will be recorded anyway, so a missing key just means
 			// this run becomes the baseline instead of being estimated.
 			m, bootstrap, err = runOpts.rf.resolveOrBootstrap(runOpts.rf.key)
@@ -69,33 +79,32 @@ yet) and the next invocation gets a real estimate. With a --ref, a missing
 		if err != nil {
 			return err
 		}
+		errW := cmd.ErrOrStderr()
 		if bootstrap {
-			bootstrapNotice(cmd.ErrOrStderr(), runOpts.rf.key)
+			bootstrapNotice(errW, runOpts.rf.key)
 		}
-		lv := &liveRun{est: progress.NewEstimator(m), r: render.New(cmd.ErrOrStderr())}
-		if runOpts.learn {
-			lv.dig = model.NewDigester(sourceName("run", args), nil)
+		lv := &liveRun{est: progress.NewEstimator(m), r: render.New(errW), warnW: errW}
+		if learning {
+			source := sourceName("run", args)
+			lv.dig = model.NewDigester(source, nil)
+			lv.capture = newCapture(errW, runOpts.rf.db, runOpts.rf.key, source)
 		}
 		exitCode, err := lv.execute(cmd, args)
 		if err != nil {
+			// Transport failure (e.g. the command could not start): keep
+			// whatever was captured if it is worth keeping.
+			if lv.dig != nil {
+				keepOrDiscardCapture(errW, lv.dig, lv.capture, runOpts.rf.db, runOpts.rf.key)
+			}
 			return err
 		}
 
 		final := lv.est.Snapshot()
 		lv.r.Close(final)
-		errW := cmd.ErrOrStderr()
 		fmt.Fprint(errW, render.Summary(final))
 		if lv.dig != nil {
-			if exitCode != 0 {
-				fmt.Fprintf(errW, "exit status %d -- run not learned\n", exitCode)
-			} else {
-				run, err := lv.dig.Finish()
-				if err != nil {
-					return fmt.Errorf("run not learned: %w", err)
-				}
-				if err := learnRun(errW, runOpts.rf.db, runOpts.rf.key, run); err != nil {
-					return err
-				}
+			if err := lv.finishLearn(errW, exitCode); err != nil {
+				return err
 			}
 		}
 		if exitCode != 0 {
@@ -105,15 +114,44 @@ yet) and the next invocation gets a real estimate. With a --ref, a missing
 	},
 }
 
+// finishLearn completes the learning side of a run once the child has
+// exited: on success (exit 0, or --learn-on-failure) the digest is saved
+// into the model and the capture file removed; on a failed run the digest
+// is dropped -- a truncated log would corrupt the time-gap weights -- but
+// the capture file is kept and the recovery command printed, so the data
+// is never lost.
+func (lv *liveRun) finishLearn(errW io.Writer, exitCode int) error {
+	db, key := runOpts.rf.db, runOpts.rf.key
+	if exitCode != 0 && !runOpts.learnOnFailure {
+		fmt.Fprintf(errW, "exit status %d -- run not learned\n", exitCode)
+		keepOrDiscardCapture(errW, lv.dig, lv.capture, db, key)
+		return nil
+	}
+	run, err := lv.dig.Finish()
+	if err != nil {
+		// The only Finish failure is <2 nonempty lines: nothing recoverable.
+		lv.capture.Discard()
+		return fmt.Errorf("run not learned: %w", err)
+	}
+	if err := learnRun(errW, db, key, run); err != nil {
+		keepCapture(errW, lv.capture, db, key)
+		return err
+	}
+	lv.capture.Discard()
+	return nil
+}
+
 // liveRun is the shared live state of one run invocation. The mutex
-// serializes the estimator, digester, and renderer across the stdout
-// consumer, stderr consumer, and ticker goroutines; stderr passthrough
-// writes share it via lockedWriter.
+// serializes the estimator, digester, capture writer, and renderer across
+// the stdout consumer, stderr consumer, and ticker goroutines; stderr
+// passthrough writes share it via lockedWriter.
 type liveRun struct {
-	mu  sync.Mutex
-	est *progress.Estimator
-	dig *model.Digester
-	r   *render.Renderer
+	mu      sync.Mutex
+	est     *progress.Estimator
+	dig     *model.Digester
+	capture *model.CaptureWriter
+	r       *render.Renderer
+	warnW   io.Writer
 }
 
 // execute spawns the child and pumps its output until it exits, returning
@@ -209,6 +247,9 @@ func childExitCode(ee *exec.ExitError) int {
 
 // consume forwards one child stream byte-faithfully (the tee sits at the
 // reader) while feeding its lines to the estimator with wall-clock times.
+// When learning, every line the digester consumes is also appended to the
+// capture file with the same stamp, so replaying the file reconstructs the
+// digest exactly.
 func (lv *liveRun) consume(pipe io.Reader, passthrough io.Writer) {
 	sc := linescan.NewScanner(io.TeeReader(pipe, passthrough))
 	for sc.Scan() {
@@ -217,6 +258,9 @@ func (lv *liveRun) consume(pipe io.Reader, passthrough io.Writer) {
 		lv.est.Observe(sc.Text(), now)
 		if lv.dig != nil {
 			lv.dig.LineAt(sc.Text(), now)
+			if err := lv.capture.Add(sc.Text(), now); err != nil {
+				fmt.Fprintf(lv.warnW, "warning: capture file disabled: %v\n", err)
+			}
 		}
 		lv.r.Update(lv.est.Snapshot())
 		lv.mu.Unlock()
@@ -240,5 +284,7 @@ func init() {
 	addRefFlags(runCmd, &runOpts.rf)
 	runCmd.Flags().BoolVar(&runOpts.learn, "learn", false,
 		"digest the run and save it into --key's model when CMD exits 0 (a key with no model yet records the baseline)")
+	runCmd.Flags().BoolVar(&runOpts.learnOnFailure, "learn-on-failure", false,
+		"save the run into --key's model even when CMD exits non-zero (implies --learn; the exit code still propagates)")
 	rootCmd.AddCommand(runCmd)
 }

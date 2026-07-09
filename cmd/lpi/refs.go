@@ -148,6 +148,43 @@ func learnRun(w io.Writer, db, key string, run *model.Run) error {
 	return nil
 }
 
+// newCapture opens the durable capture file for a learning run, warning and
+// returning nil (capture disabled) when it cannot be created -- the recovery
+// feature must never break the primary flow. All *CaptureWriter methods are
+// nil-safe, so callers need no branches.
+func newCapture(w io.Writer, db, key, source string) *model.CaptureWriter {
+	cw, err := model.NewCaptureWriter(db, key, source)
+	if err != nil {
+		fmt.Fprintf(w, "warning: capture file disabled: %v\n", err)
+		return nil
+	}
+	return cw
+}
+
+// keepCapture closes the capture file, leaves it in place, and prints the
+// recovery instructions used by run and pipe when a learning run fails.
+// A nil capture (creation failed earlier) prints nothing.
+func keepCapture(w io.Writer, cw *model.CaptureWriter, db, key string) {
+	if cw == nil {
+		return
+	}
+	_ = cw.Close()
+	fmt.Fprintf(w, "captured log kept: %s\n", cw.Path())
+	fmt.Fprintf(w, "learn it later with: lpi learn --key %s --db %s %s\n", key, db, cw.Path())
+}
+
+// keepOrDiscardCapture keeps the capture file with recovery instructions
+// when dig holds anything recoverable, and removes it otherwise: with fewer
+// than 2 nonempty lines the printed recovery command could never succeed,
+// and a hint that cannot work is worse than none.
+func keepOrDiscardCapture(w io.Writer, dig *model.Digester, cw *model.CaptureWriter, db, key string) {
+	if _, err := dig.Finish(); err != nil {
+		cw.Discard()
+		return
+	}
+	keepCapture(w, cw, db, key)
+}
+
 // jsonSnapshot is the stable JSON form of a progress snapshot, shared by
 // --json and --json-stream. eta_seconds is only present when there is an
 // ETA.

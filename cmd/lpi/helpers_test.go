@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -78,6 +80,23 @@ func loadModel(t *testing.T, db, key string) *model.Model {
 	m, err := model.Load(model.PathForKey(db, key))
 	require.NoError(t, err)
 	return m
+}
+
+// pendingFiles lists the capture files under db's pending directory
+// (empty when the directory does not exist).
+func pendingFiles(t *testing.T, db string) []string {
+	t.Helper()
+	dir := model.PendingDir(db)
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	require.NoError(t, err)
+	var paths []string
+	for _, e := range entries {
+		paths = append(paths, filepath.Join(dir, e.Name()))
+	}
+	return paths
 }
 
 // parseJSONLine unmarshals one JSON object into a generic map.

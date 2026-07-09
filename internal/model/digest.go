@@ -184,8 +184,10 @@ func DigestReader(r io.Reader, source string, format *timeparse.Format) (*Run, e
 const detectLines = 300
 
 // DigestFile digests a log file into a Run. Gzip files are handled
-// transparently (sniffed via magic bytes). The first 300 lines are sampled
-// for timeparse.Detect, then the whole file is digested.
+// transparently (sniffed via magic bytes), as are lpi capture files (sniffed
+// via their header line), whose records carry the exact per-line times of
+// the recorded run. For plain logs the first 300 lines are sampled for
+// timeparse.Detect, then the whole file is digested.
 func DigestFile(path string) (*Run, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -204,8 +206,14 @@ func DigestFile(path string) (*Run, error) {
 	}
 	sc := linescan.NewScanner(r)
 	var sample []string
-	for len(sample) < detectLines && sc.Scan() {
+	if sc.Scan() {
+		if label, ok := parseCaptureHeader(sc.Text()); ok {
+			return digestCapture(sc, path, label)
+		}
 		sample = append(sample, sc.Text())
+		for len(sample) < detectLines && sc.Scan() {
+			sample = append(sample, sc.Text())
+		}
 	}
 	d := NewDigester(path, timeparse.Detect(sample))
 	for _, ln := range sample {
@@ -213,6 +221,26 @@ func DigestFile(path string) (*Run, error) {
 	}
 	for sc.Scan() {
 		d.Line(sc.Text())
+	}
+	if err := sc.Err(); err != nil {
+		return nil, err
+	}
+	return d.Finish()
+}
+
+// digestCapture digests the records following a capture-file header via
+// per-record explicit times, reconstructing the run exactly as it was
+// digested live. The header's source label becomes Run.Source when present;
+// otherwise the file path does, matching plain-log behavior.
+func digestCapture(sc *linescan.Scanner, path, label string) (*Run, error) {
+	source := path
+	if label != "" {
+		source = label
+	}
+	d := NewDigester(source, nil)
+	for sc.Scan() {
+		text, at := parseCaptureRecord(sc.Text())
+		d.LineAt(text, at)
 	}
 	if err := sc.Err(); err != nil {
 		return nil, err
