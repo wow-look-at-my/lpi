@@ -2,12 +2,19 @@ package main
 
 import (
 	"bytes"
+	"errors"
+	"io"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/wow-look-at-my/log-progress-indicator/internal/model"
 )
 
 func TestPipePassthroughAndLearn(t *testing.T) {
@@ -27,6 +34,7 @@ func TestPipePassthroughAndLearn(t *testing.T) {
 	m := loadModel(t, db, "captured")
 	assert.Len(t, m.Runs, 1)
 	assert.Equal(t, 66, m.Runs[0].Lines)
+	assert.Empty(t, pendingFiles(t, db), "a learned stream leaves no capture file behind")
 }
 
 func TestPipeWeirdBytesStayIntact(t *testing.T) {
@@ -122,6 +130,89 @@ func TestPipeLearnTooShort(t *testing.T) {
 	_, _, err := execLpi(t, strings.NewReader("only one line\n"), "pipe",
 		"--db", db, "--key", "demo", "--learn-key", "captured")
 	require.ErrorContains(t, err, "run not learned")
+	assert.Empty(t, pendingFiles(t, db), "fewer than 2 nonempty lines is nothing worth recovering")
+}
+
+// errAfterReader yields its data, then fails with err instead of EOF.
+type errAfterReader struct {
+	data []byte
+	err  error
+}
+
+func (r *errAfterReader) Read(p []byte) (int, error) {
+	if len(r.data) == 0 {
+		return 0, r.err
+	}
+	n := copy(p, r.data)
+	r.data = r.data[n:]
+	return n, nil
+}
+
+func TestPipeScannerErrorKeepsCapture(t *testing.T) {
+	db := seedDemoModel(t)
+	boom := errors.New("stdin exploded")
+	stdin := &errAfterReader{data: []byte("alpha line\nbeta line\n"), err: boom}
+
+	_, errOut, err := execLpi(t, stdin, "pipe", "--db", db, "--key", "demo", "--learn-key", "captured")
+	require.ErrorIs(t, err, boom)
+	assert.NotContains(t, errOut, "learned run")
+
+	files := pendingFiles(t, db)
+	require.Len(t, files, 1, "the capture must survive a read error")
+	assert.Contains(t, errOut, "captured log kept: "+files[0])
+	assert.Contains(t, errOut, "learn it later with: lpi learn --key captured --db "+db+" "+files[0])
+	_, err = model.Load(model.PathForKey(db, "captured"))
+	assert.True(t, os.IsNotExist(err), "the interrupted stream must not be learned")
+}
+
+// TestPipeInterruptKeepsCaptureAndSkipsLearn covers the Ctrl-C race: the
+// same signal that kills the upstream would EOF stdin and trigger the
+// unconditional EOF-learn of a truncated stream. The handler must win: keep
+// the capture, report, and exit 130 without learning.
+func TestPipeInterruptKeepsCaptureAndSkipsLearn(t *testing.T) {
+	db := seedDemoModel(t)
+	code := captureExit(t)
+
+	// Keep the process alive if the signal beats pipe's handler
+	// registration (the runtime disables the default death while any
+	// channel is notified).
+	guard := make(chan os.Signal, 1)
+	signal.Notify(guard, syscall.SIGINT)
+	defer signal.Stop(guard)
+
+	pr, pw := io.Pipe()
+	go func() {
+		_, _ = pw.Write([]byte("alpha line\nbeta line\n"))
+		time.Sleep(400 * time.Millisecond) // let pipe arm its handler
+		_ = syscall.Kill(os.Getpid(), syscall.SIGINT)
+		time.Sleep(300 * time.Millisecond) // let the handler run before EOF
+		_ = pw.Close()
+	}()
+
+	_, errOut, err := execLpi(t, pr, "pipe", "--db", db, "--key", "demo", "--learn-key", "captured")
+	require.NoError(t, err)
+	assert.Equal(t, 130, *code, "SIGINT maps to 128+2")
+	assert.Contains(t, errOut, "interrupted -- run not learned")
+
+	files := pendingFiles(t, db)
+	require.Len(t, files, 1, "the capture must survive the interrupt")
+	assert.Contains(t, errOut, "captured log kept: "+files[0])
+	assert.Contains(t, errOut, "learn it later with: lpi learn --key captured --db "+db+" "+files[0])
+	_, err = model.Load(model.PathForKey(db, "captured"))
+	assert.True(t, os.IsNotExist(err), "a truncated stream must never be learned")
+}
+
+// TestPipeLearnSaveFailureKeepsCapture drives the save to fail (model file
+// name past the OS limit) and checks the capture survives with hints.
+func TestPipeLearnSaveFailureKeepsCapture(t *testing.T) {
+	db := t.TempDir()
+	longKey := strings.Repeat("p", 246)
+	_, errOut, err := execLpi(t, strings.NewReader("alpha line\nbeta line\n"), "pipe",
+		"--db", db, "--learn-key", longKey)
+	require.Error(t, err, "the model save must fail")
+	files := pendingFiles(t, db)
+	require.Len(t, files, 1)
+	assert.Contains(t, errOut, "captured log kept: "+files[0])
 }
 
 func TestPipeRequiresReference(t *testing.T) {

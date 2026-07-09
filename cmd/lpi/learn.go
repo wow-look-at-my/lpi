@@ -3,6 +3,9 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -21,7 +24,10 @@ var learnCmd = &cobra.Command{
 	Long: `Learn digests one or more logs of COMPLETED runs and stores them
 under a model key. Later invocations add runs to the same key (the oldest
 runs are evicted beyond ` + fmt.Sprint(model.MaxRuns) + `); --replace starts
-the key from scratch instead. Gzipped logs are handled transparently.`,
+the key from scratch instead. Gzipped logs are handled transparently, as are
+the capture files a failed 'lpi run --learn' or 'lpi pipe --learn-key' keeps
+under <db>/pending/ -- they replay with the exact per-line times of the
+recorded run, and once learned they are removed from pending/.`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		key := learnOpts.rf.key
@@ -52,8 +58,30 @@ the key from scratch instead. Gzipped logs are handled transparently.`,
 		}
 		fmt.Fprintf(out, "model %q: %d runs, %d units%s -> %s\n",
 			key, len(m.Runs), m.TotalUnits, modelDuration(m), dest)
+		removePendingCaptures(out, db, args)
 		return nil
 	},
+}
+
+// removePendingCaptures deletes ingested files that live inside db's
+// pending/ directory: the model now owns their data, so the capture files
+// kept by a failed run have completed their lifecycle. Files elsewhere are
+// never touched, and nothing is removed unless the save succeeded (the
+// caller returns early on any error). Removal is best-effort.
+func removePendingCaptures(w io.Writer, db string, paths []string) {
+	pending, err := filepath.Abs(model.PendingDir(db))
+	if err != nil {
+		return
+	}
+	for _, path := range paths {
+		abs, err := filepath.Abs(path)
+		if err != nil || filepath.Dir(abs) != pending {
+			continue
+		}
+		if os.Remove(abs) == nil {
+			fmt.Fprintf(w, "removed pending capture: %s\n", path)
+		}
+	}
 }
 
 func runDuration(r *model.Run) string {
