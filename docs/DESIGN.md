@@ -98,6 +98,84 @@ Otherwise there is no ETA (kind `"none"`). ETAs are clamped to >= 0.
 Novel lines (fingerprint not in the model) and overflow lines (fingerprint
 known but its reference occurrences are exhausted) are tracked separately.
 
+## Capture durability
+
+Learning happens live, in memory: the digester keeps fingerprint
+occurrences, not raw text, so before this mechanism existed a failure at
+the end of a 40-minute learning run -- a non-zero exit, a signal, a failed
+save, or lpi itself dying -- discarded everything. The capture file makes
+learning durable: a learning run (`run --learn`/`--learn-on-failure`,
+`pipe --learn-key`) streams every line the digester consumes to
+`<db>/pending/<key>-<YYYYMMDD-HHMMSS>-<pid>.log` as it goes, with direct
+unbuffered writes, so even SIGKILL of lpi loses nothing that reached the
+digester.
+
+### Format (v1)
+
+The first line is the header: `#lpi-capture v1`, optionally followed by one
+tab and a source label (which becomes `Run.Source` on replay; without it
+the file path is used, matching plain logs). Each subsequent record is
+
+    <int64 unix nanoseconds>\t<line text>\n
+
+split on the FIRST tab only, so line text may itself contain tabs. Empty
+lines are recorded too, stamped like any other; the digester skips them
+identically live and on replay, so the reconstructed Run is identical to
+the one digested live.
+
+Times are out-of-band (a stamp column, not part of the text) because
+fingerprints hash the FULL line text: prepending stamps in-band would
+produce templates that never match live lines, making a recovered model
+useless. This is the trap the format exists to avoid.
+
+`model.DigestFile` sniffs the header (after the gzip sniff, so gzipped
+captures work) and replays records through `Digester.LineAt` with the
+recorded times -- which means capture files work everywhere a reference log
+does: `lpi learn`, and `--ref` on any command, with full timing.
+
+### Lifecycle
+
+- Created when a learning run starts. Creation or write failures disable
+  capture with a single stderr warning (`warning: capture file disabled:`)
+  and never fail the run: recovery must not break the primary flow.
+- Removed when the run is learned (exit 0, `--learn-on-failure`, or pipe
+  EOF): a clean success leaves nothing behind.
+- Kept on any failure that loses the digest -- non-zero exit, signal-killed
+  child, stdin read error, interrupted pipe, failed model save -- along
+  with two printed recovery lines: `captured log kept: <path>` and
+  `learn it later with: lpi learn --key <key> --db <db> <path>`.
+- Exception: when the digester saw fewer than 2 nonempty lines the printed
+  command could never succeed (Finish would fail), so the file is removed
+  and only the error is printed.
+- `lpi learn` completes the cycle: after a successful save, any ingested
+  file living inside the current db's `pending/` directory is removed
+  (`removed pending capture: <path>`). Files outside `pending/` are never
+  touched, and nothing is removed when learning fails.
+
+Failed runs are deliberately NOT merged automatically: a truncated log
+would corrupt the time-gap weights (the missing tail's time would be
+redistributed over the lines that did print), so the default is
+recoverability, and `run --learn-on-failure` is the explicit opt-in for
+"this failed run is still representative".
+
+`pipe --learn-key` additionally installs a SIGINT/SIGTERM handler (only
+when learning): the same Ctrl-C that interrupts lpi also kills the upstream
+command, whose death EOFs stdin -- and pipe's unconditional EOF-learn would
+merge a truncated stream into the model. The handler wins instead: it
+serializes with the render/estimator mutex, prints
+`interrupted -- run not learned` plus the recovery lines, and exits 128+N
+immediately (the capture file is already durable on disk). A signal that
+arrives after the stream completed is ignored.
+
+### Atomic save
+
+`Model.Save` used to create the target in place, so a crash or full disk
+mid-encode destroyed the previous model (double loss: the run AND its
+reference), and a truncated file made every later Load fail until
+`model rm`. Save now writes to a temp file in the same directory and
+renames it over the target only once complete, removing the temp on any
+error: a failed save leaves an existing model byte-identical.
+
 ## Package reference
 
 ### internal/fingerprint
@@ -189,6 +267,13 @@ caller carries the previous time forward.
     func Load(path string) (*Model, error)
     func DefaultDir() string
     func PathForKey(dir, key string) string
+    func PendingDir(db string) string // <db>/pending, the capture-file dir
+    type CaptureWriter struct{ ... }  // nil-safe methods; see "Capture durability"
+    func NewCaptureWriter(db, key, source string) (*CaptureWriter, error)
+    func (cw *CaptureWriter) Add(text string, at time.Time) error
+    func (cw *CaptureWriter) Path() string
+    func (cw *CaptureWriter) Close() error
+    func (cw *CaptureWriter) Discard()
 
 Digester rules:
 
@@ -205,8 +290,19 @@ Digester rules:
   `WeightFrac_i = (t_i - t_prev) / Duration`; the first line overall has
   weight 0. The sum of all `WeightFrac` is 1 (within float error).
 
-`DigestFile` handles gzip transparently (sniffing the magic bytes), samples
-the first 300 lines for `timeparse.Detect`, then digests the whole file.
+`DigestFile` handles gzip transparently (sniffing the magic bytes) and
+capture files transparently (sniffing the `#lpi-capture v1` header, whose
+records replay through `LineAt` with their recorded times); for plain logs
+it samples the first 300 lines for `timeparse.Detect`, then digests the
+whole file.
+
+`CaptureWriter` streams a learning run's consumed lines to
+`<db>/pending/`; `Add` disables itself after the first write failure
+(returning that failure once so the caller can warn), and every method is
+nil-receiver-safe so a disabled capture needs no call-site branches. A
+sanitized key prefix (capped at 40 bytes), timestamp, and pid make the file
+name unique; `pending/` entries lack the `.lpi` suffix, so `model list` and
+the available-keys error listing never mistake them for models.
 
 `Rebuild` merges up to `MaxRuns = 8` runs:
 
@@ -221,7 +317,8 @@ the first 300 lines for `timeparse.Detect`, then digests the whole file.
   among runs with `HasTimes` (0 if none). `HasTimes` = any run has times.
 
 Persistence: `Save` writes a gzip-compressed gob envelope
-`{Version: 1, Key, Runs}` (creating parent directories as needed); `Load`
+`{Version: 1, Key, Runs}` (creating parent directories as needed),
+atomically via a same-directory temp file renamed over the target; `Load`
 rejects unknown versions and calls `Rebuild`. `DefaultDir` honors `$LPI_DB`,
 then `$XDG_CACHE_HOME/log-progress-indicator`, then
 `~/.cache/log-progress-indicator`. `PathForKey` sanitizes the key to
@@ -342,17 +439,25 @@ stamps lines with parsed-or-wall-clock times.
   (stdout is the passthrough). At EOF: summary, and `--learn-key` digests
   the run into that key -- unconditionally, since a pipe cannot see the
   upstream exit status. With neither `--key` nor `--ref`, `--learn-key`
-  doubles as the reference key.
-- `run [--ref|--key] [--learn] -- CMD [ARGS...]` -- spawns CMD, passes both
-  streams through, feeds one estimator (mutex-shared across both stream
-  goroutines and a 500ms ticker), forwards SIGINT/SIGTERM, propagates the
-  exit code through the `osExit` seam -- 128+N when signal N killed the
-  child (shell convention; the `syscall.WaitStatus` assertion lives in
-  run.go without build tags because the type exists on every GOOS the
-  package builds on). `--learn` (requires `--key`) saves the run only on
-  exit code 0.
+  doubles as the reference key. A learning pipe streams to a capture file
+  and arms the interrupt handler described in "Capture durability": read
+  errors and failed saves keep the file with recovery hints; Ctrl-C keeps
+  it and exits 128+N without learning the truncated stream.
+- `run [--ref|--key] [--learn|--learn-on-failure] -- CMD [ARGS...]` --
+  spawns CMD, passes both streams through, feeds one estimator
+  (mutex-shared across both stream goroutines and a 500ms ticker), forwards
+  SIGINT/SIGTERM, propagates the exit code through the `osExit` seam --
+  128+N when signal N killed the child (shell convention; the
+  `syscall.WaitStatus` assertion lives in run.go without build tags because
+  the type exists on every GOOS the package builds on). `--learn` (requires
+  `--key`) saves the run only on exit code 0; `--learn-on-failure` (implies
+  `--learn`) saves it regardless. Both stream every consumed line -- the
+  digester sees stdout and stderr alike -- to the capture file; a failed
+  run keeps it and prints the recovery command ("Capture durability").
 - `learn --key K [--replace] LOG...` -- digests completed logs
-  (gzip-transparent), prints per-log stats and the model summary.
+  (gzip-transparent, capture-file-transparent), prints per-log stats and
+  the model summary, then removes any ingested captures living in the
+  current db's `pending/` directory.
 - `model list|show KEY|rm KEY` -- database management, honoring `--db`.
 
 Live learning re-loads the key's model from disk before saving, so ad-hoc
@@ -365,8 +470,10 @@ and any explicit `--key` equals the learn target (a missing `--key` naming
 a different key still errors, as does a missing `--key` combined with
 `--ref`). The mode prints `no model for key "K" yet -- recording baseline
 run` to stderr and runs the estimator against an empty model, and the run
-is digested and saved under the usual rules (run: exit 0 only; pipe: EOF),
-so the next invocation has a real reference.
+is digested and saved under the usual rules (run: exit 0 or
+--learn-on-failure; pipe: clean EOF), so the next invocation has a real
+reference. A failed baseline is not lost either: its capture file is kept
+like any other failed learning run.
 
 ## Build and test
 

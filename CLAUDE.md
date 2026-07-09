@@ -32,6 +32,9 @@ internal/
   linescan/     long-line-safe line splitting (1 MiB cap, \r strip)
   timeparse/    timestamp format detection and stateful parsing
   model/        run digestion (time-gap weights), run merging, persistence
+                (atomic save), capture.go: durable capture files for
+                learning runs (written under <db>/pending/, sniffed by
+                DigestFile via the "#lpi-capture v1" header)
   progress/     the live estimator: occurrence matching -> Snapshot
   tailer/       polling file follower (truncation, rotation, appears-late)
   render/       Bar/StatusLine/Summary strings + TTY-aware Renderer
@@ -67,9 +70,21 @@ testdata/demo/         two complete fake cmake builds + a ~55% partial run,
   Tick. watch buffers up to 300 lines (or until the first tick) to decide.
 - pipe/run passthrough tees at the reader, so stdout stays byte-faithful
   even for overlong or binary lines.
-- run only learns on exit code 0 and propagates the child's exit code
-  (128+N when signal N killed it, e.g. SIGTERM -> 143); pipe learns on EOF
-  unconditionally (documented caveat).
+- run learns on exit code 0 (or always, with --learn-on-failure, which
+  implies --learn) and propagates the child's exit code (128+N when signal
+  N killed it, e.g. SIGTERM -> 143); pipe learns on clean EOF (documented
+  caveat) -- except when interrupted: a SIGINT/SIGTERM to a learning pipe
+  prints "interrupted -- run not learned", keeps the capture file, and
+  osExits 128+N so the truncated stream is never merged at EOF.
+- Durable capture: every learning run/pipe streams consumed lines to
+  <db>/pending/<key>-<stamp>-<pid>.log (format in docs/DESIGN.md). Learned
+  -> file removed; failed (non-zero exit, signal, read error, save error)
+  -> file kept and the exact "lpi learn --key K --db D <path>" recovery
+  command printed; <2 nonempty lines -> nothing recoverable, removed.
+  Capture-file problems only warn ("capture file disabled") -- they never
+  fail the run. `lpi learn` auto-detects capture files (full per-line
+  timing preserved) and removes ingested ones that live in the current
+  db's pending/ dir after a successful save.
 - Live-learning bootstrap: a learn-target key with no model yet is NOT an
   error for `run --learn`/`pipe --learn-key` (when no `--ref` and any
   `--key` equals the learn key) -- the run records the baseline against an

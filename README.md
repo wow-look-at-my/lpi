@@ -56,6 +56,22 @@ exits 0, so failed runs never pollute the reference. With `--learn` and no
 recorded as the baseline (no progress bar yet), and the next invocation
 shows real progress.
 
+A learning run is never lost to a failure: every consumed line is also
+streamed to a capture file under `<db>/pending/` as it goes. When the run
+is learned, the file is silently removed. When the command fails (non-zero
+exit, killed by a signal) or the model save fails, the file is kept and the
+exact recovery command is printed:
+
+```
+exit status 2 -- run not learned
+captured log kept: /home/me/.cache/log-progress-indicator/pending/mybuild-20260709-093012-4711.log
+learn it later with: lpi learn --key mybuild --db /home/me/.cache/log-progress-indicator /home/me/.cache/log-progress-indicator/pending/mybuild-20260709-093012-4711.log
+```
+
+`--learn-on-failure` (implies `--learn`) saves the run into the model even
+on a non-zero exit -- for when a failed run's log is still a representative
+reference. The child's exit code propagates either way.
+
 ### `lpi analyze` -- a partial log already on disk
 
 ```sh
@@ -106,6 +122,16 @@ different key than `--learn-key` must still exist.) Note: a pipe cannot see
 the upstream command's exit status, so it learns on EOF even if the
 upstream failed -- prefer `lpi run` for success-gated learning.
 
+A learning pipe streams every consumed line to a capture file under
+`<db>/pending/`, exactly like `lpi run --learn`: removed once the stream is
+learned, kept -- with the recovery command printed -- when reading stdin
+fails or the save fails. Ctrl-C is handled specially: the same signal kills
+the upstream command, whose death would otherwise EOF stdin and learn a
+truncated stream. Instead, an interrupted learning pipe prints
+`interrupted -- run not learned`, keeps the capture file, and exits 128+N
+immediately, so the partial stream stays recoverable but never pollutes the
+model.
+
 ### `lpi learn` / `lpi model` -- manage the reference database
 
 ```sh
@@ -125,7 +151,37 @@ A model keeps up to 8 runs (oldest evicted); `--replace` starts a key from
 scratch. Models are stored in `$LPI_DB` if set, else
 `$XDG_CACHE_HOME/log-progress-indicator`, else
 `~/.cache/log-progress-indicator` -- one small gzipped file per key. Every
-command takes `--db DIR` to override.
+command takes `--db DIR` to override. Model saves are atomic (temp file +
+rename), so a crash or full disk mid-save can never corrupt an existing
+model.
+
+`lpi learn` (and `--ref`) also accepts the capture files a failed learning
+run keeps under `<db>/pending/` -- they are auto-detected by their header
+and replay with the exact per-line times of the recorded run. Once a
+pending capture is learned into the current database, `lpi learn` removes
+it (`removed pending capture: ...`), completing the lifecycle.
+
+### Recovering a lost run
+
+If a 40-minute `lpi run --learn` dies at minute 41 -- non-zero exit, a
+crashed terminal, even `kill -9` of lpi itself -- the log it consumed is
+already on disk under `<db>/pending/`, one line per line consumed, stamped
+with the original times. On any failure lpi prints the exact command to
+recover it; run it verbatim:
+
+```sh
+lpi learn --key mybuild --db ~/.cache/log-progress-indicator \
+  ~/.cache/log-progress-indicator/pending/mybuild-20260709-093012-4711.log
+```
+
+The run is merged into the model with full timing data, the pending file is
+removed, and the next `lpi run --key mybuild` estimates against it. Failed
+runs are deliberately not merged automatically: a truncated log would
+corrupt the model's time-gap weights, so the default is recoverability, and
+the choice to merge stays yours (`--learn-on-failure` opts into merging).
+If lpi was killed outright and could not print the hint, look in
+`<db>/pending/` -- captures of successfully learned runs are always cleaned
+up, so anything there is recoverable data.
 
 ## How it works
 
@@ -187,8 +243,9 @@ overflow lines (seen more often than expected) are counted separately.
   match rate -- and the estimate's trustworthiness -- drops. The
   `confidence` field says when to squint.
 - **Pipe learning is not success-gated.** `lpi pipe --learn-key` saves
-  whatever it saw at EOF, even if the upstream command failed. Use
-  `lpi run --learn` when you can.
+  whatever it saw at EOF, even if the upstream command failed (Ctrl-C is
+  the exception: an interrupted learning pipe keeps its capture file and
+  exits without learning). Use `lpi run --learn` when you can.
 - Progress can sit still during steps the reference says are long -- that is
   the honest answer, not a hang.
 
