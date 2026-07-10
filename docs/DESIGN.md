@@ -98,6 +98,139 @@ Otherwise there is no ETA (kind `"none"`). ETAs are clamped to >= 0.
 Novel lines (fingerprint not in the model) and overflow lines (fingerprint
 known but its reference occurrences are exhausted) are tracked separately.
 
+## Automatic mode (content-first pattern identity)
+
+`lpi CMD [ARGS...]` -- no subcommand, no flags -- runs CMD under live
+progress tracking with nothing to configure: no key to invent, no learn
+flag to remember. The routing layer turns it into `lpi auto -- CMD ...`,
+and `auto` identifies which stored pattern the output belongs to, shows
+progress against it, and learns from every clean exit.
+
+### Identity is the output, never the command
+
+The command line cannot be a pattern's identity. Commands are many-to-one
+with what they actually do (`make`, `make -j8`, and `nice make -j12`
+produce the same build; so do `cat build.log` and `sh -c 'cat build.log'`)
+and one-to-many (`make` in two different worktrees, or before and after a
+checkout, is two entirely different workloads). The output already carries
+the identity -- the fingerprint multiset IS the workload -- so auto mode
+matches the live output against every stored pattern and lets the output
+claim its own reference. Command lines are kept only as display labels.
+
+### Patterns are ordinary models
+
+A "pattern" is a normal model with two extra conventions:
+
+- **Storage id.** Auto-recorded patterns live under `auto.<hash16>`:
+  `model.AutoKey(run)` hashes the first recorded run's fingerprint
+  multiset (each fingerprint and its occurrence count, ascending
+  fingerprint order, 8 bytes big-endian each, FNV-1a 64) into `auto.`
+  plus 16 lowercase hex chars. The id is only a storage handle --
+  identity is re-established from content on every run -- but a
+  content-derived id makes re-recording identical output land on the
+  same file. `auto.` is the reserved namespace for auto-recorded
+  patterns; `.` is already in the key charset, so the id survives
+  sanitizeKey unchanged.
+- **Invocation labels.** `Model.Invocations` keeps the command lines
+  that produced the pattern: most recent first, deduplicated (a repeat
+  moves to the front), capped at `MaxInvocations = 5`, empty strings
+  ignored. `DisplayLabel()` is `Invocations[0]` when present, else the
+  key. User-keyed models gain labels too when auto mode merges into them.
+
+### The fit chooser
+
+`progress.NewChooser` builds one estimator per stored model plus a "null"
+estimator over an empty model (it supplies line counts, elapsed time, and
+confidence-"none" snapshots for the pre-lock and no-candidate states).
+Every observed line feeds every estimator. Because matching is order-free
+and every candidate consumes the stream from line 1, locking late or
+switching the lock costs nothing: the winner's estimator state is already
+exact, so the display is correct from the moment of the decision.
+
+The lifecycle is a small state machine over cumulative match rates
+(matched/current), evaluated after every counted line:
+
+| threshold | value | role |
+|---|---|---|
+| `lockMinLines` | 12 | never lock before this many counted lines |
+| `earlyLockRate` | 0.80 | rate that locks as soon as lockMinLines is reached |
+| `lockWindowLines` | 32 | standard decision point |
+| `lockRate` | 0.50 | minimum rate to lock at/after the window |
+| `switchMargin` | 0.15 | a rival must beat the locked rate by this to steal the lock |
+| `mergeRate` | 0.60 | minimum final rate to merge the run into the locked pattern |
+
+- **Unlocked.** From `lockMinLines` counted lines, a candidate at
+  `earlyLockRate` locks immediately (an 80% rate on 12+ lines is not a
+  coincidence). From `lockWindowLines`, `lockRate` suffices -- and the
+  check keeps running on every later line, so a preamble-heavy log locks
+  late, the moment a candidate's cumulative rate climbs through
+  `lockRate`.
+- **Locked.** A rival steals the lock only at `lockRate` or better AND
+  `switchMargin` above the locked candidate's rate. The margin is
+  hysteresis: sibling patterns with heavy overlap would otherwise flap
+  the lock (and the label) back and forth line by line.
+- **Ties** break deterministically: higher rate, then higher matched
+  weight, then more runs in the model, then the lexicographically
+  smaller key.
+
+Rationale for the two-bar design: locking is a *display* decision --
+being provisionally wrong costs a mislabeled status line that the next
+lines correct -- so it can afford `lockRate` 0.5. Merging a run into the
+wrong pattern corrupts stored state, so the merge bar is higher:
+`mergeRate` 0.6 aligns with the "medium" confidence boundary (below it
+the estimate itself is labeled untrustworthy, and a run the estimator
+does not trust has no business becoming reference data).
+
+### Status surface
+
+Pre-lock, the status line shows `identifying pattern  lines N  elapsed E`
+(the snapshot carries `Identifying: true`); with no stored patterns at all
+the snapshot is the plain empty-model one and renders as the existing
+`recording baseline` branch. After the lock, the normal bar/percent line
+gains a trailing `ref <label>` segment (`Snapshot.Label`, truncated for
+the status line), and the final summary names the pattern on its own
+`Pattern` row. There are NO out-of-band prints mid-run: notices (learned/
+recorded/recovery lines) print only after the renderer closes, so they
+never interleave with a repainting status line.
+
+### Learning semantics
+
+Auto mode always digests the run (and always streams a capture file, key
+prefix `auto`). On exit 0:
+
+- locked with final rate >= `mergeRate` -> the run merges into the locked
+  pattern (`learnRun`), and the command line joins its Invocations.
+- otherwise -> a new pattern is recorded under `model.AutoKey(run)`,
+  labeled with the command line. If a model already exists under that id,
+  the run merges into it instead: the id is a content hash, so an
+  existing file means this exact output shape was recorded before --
+  same pattern (this also catches sub-`lockMinLines` runs, which can
+  never lock).
+
+On a non-zero exit the run is never merged (same reasoning as
+`run --learn`: a truncated log corrupts time-gap weights). The capture
+file is kept and the recovery command printed; its key is the fitted
+pattern when the fit cleared `mergeRate`, else the content id -- in both
+cases where a recovery would sensibly land. Fewer than 2 nonempty lines
+follows the usual rule: nothing recoverable, capture removed. The child's
+exit code propagates unchanged.
+
+### CLI routing
+
+`routeArgs` rewrites `os.Args[1:]` before cobra parses:
+
+- empty, or a first arg starting with `-` (`--help`, `--version`):
+  unchanged.
+- first arg exactly `--`: `auto -- <rest>` (the explicit magic form).
+- first arg a registered subcommand or alias, or one of cobra's implicit
+  `help`/`completion`/`__complete`/`__completeNoDesc` entry points:
+  unchanged -- subcommands always win over the magic path.
+- anything else: `auto -- <all args>`, so the wrapped command's own flags
+  (`lpi make -j8`) are never parsed as lpi flags.
+
+A wrapped command whose name collides with a subcommand (`lpi run ...`
+meaning some other `run` binary) needs the `lpi -- run ...` escape.
+
 ## Capture durability
 
 Learning happens live, in memory: the digester keeps fingerprint
@@ -143,7 +276,10 @@ does: `lpi learn`, and `--ref` on any command, with full timing.
 - Kept on any failure that loses the digest -- non-zero exit, signal-killed
   child, stdin read error, interrupted pipe, failed model save -- along
   with two printed recovery lines: `captured log kept: <path>` and
-  `learn it later with: lpi learn --key <key> --db <db> <path>`.
+  `learn it later with: lpi learn --key <key> --db <db> <path>`. For auto
+  mode the file's name prefix is the fixed `auto`, and the recovery
+  command's `--key` is computed after the fact: the fitted pattern when
+  the fit cleared mergeRate, else the run's content id (`auto.<hash16>`).
 - Exception: when the digester saw fewer than 2 nonempty lines the printed
   command could never succeed (Finish would fail), so the file is removed
   and only the error is printed.
@@ -252,8 +388,9 @@ caller carries the previous time forward.
     func DigestReader(r io.Reader, source string, format *timeparse.Format) (*Run, error)
     func DigestFile(path string) (*Run, error)
     type Model struct {
-        Key  string
-        Runs []*Run
+        Key         string
+        Runs        []*Run
+        Invocations []string // display labels, most recent first (never identity)
         // derived by Rebuild():
         Expect      map[uint64][]Occurrence
         TotalUnits  int
@@ -262,6 +399,9 @@ caller carries the previous time forward.
     }
     func New(key string) *Model
     func (m *Model) AddRun(r *Run) // FIFO-evict beyond MaxRuns=8, then Rebuild
+    func (m *Model) AddInvocation(cmd string) // dedupe to front, cap MaxInvocations=5
+    func (m *Model) DisplayLabel() string     // Invocations[0], else Key
+    func AutoKey(r *Run) string // "auto." + 16 hex of the fingerprint multiset
     func (m *Model) Rebuild()
     func (m *Model) Save(path string) error
     func Load(path string) (*Model, error)
@@ -346,8 +486,24 @@ and appends `.lpi`.
         Pace         float64 // 0 if unknown
         MatchRate    float64
         Confidence   string  // "high" | "medium" | "low" | "none"
+        Identifying  bool    // set by the Chooser pre-lock; zero for Estimators
+        Label        string  // locked pattern's display label; zero for Estimators
         CurrentLines, MatchedLines, NovelLines, OverflowLines int
     }
+    type Candidate struct {
+        Key   string
+        Label string
+        Model *model.Model
+    }
+    type Chooser struct{ ... } // see "Automatic mode"
+    func NewChooser(cands []Candidate) *Chooser
+    func (c *Chooser) Observe(line string, at time.Time)
+    func (c *Chooser) Tick(at time.Time)
+    func (c *Chooser) Snapshot() Snapshot
+    func (c *Chooser) Locked() (key, label string, ok bool)
+    func (c *Chooser) Best() (key string, rate float64, ok bool)
+    func (c *Chooser) FinalRate(key string) float64
+    func (c *Chooser) MergeTarget() (key, label string, ok bool) // Locked + rate >= mergeRate
 
 `Observe` skips empty-normalized lines entirely. For each remaining line the
 fingerprint is looked up in `model.Expect`: unknown -> novel; known with
@@ -407,7 +563,12 @@ models. Against an empty model (`UnitsTotal == 0`, baseline recording) a
 bar would be meaningless, so `StatusLine` renders
 `recording baseline  lines 1234  elapsed 2m14s` (elapsed omitted when
 unknown) and `Summary` renders a three-row block: `Reference: none yet
-(recording baseline)`, `Lines`, and `Elapsed`. On a TTY the Renderer repaints in place with `\r ESC[K`; otherwise
+(recording baseline)`, `Lines`, and `Elapsed`. A snapshot with
+`Identifying` set (the auto-mode Chooser, pre-lock) renders
+`identifying pattern  lines 1234  elapsed 2m14s` instead, and a non-empty
+`Label` appends a `ref <label>` segment to the status line (label
+truncated to 28 bytes plus `...`) plus a `Pattern` row in `Summary`. On a
+TTY the Renderer repaints in place with `\r ESC[K`; otherwise
 it prints a line for the first update, then at most every `PlainInterval`
 or when the whole progress percent changes. `Close` always prints the final
 line.
@@ -454,6 +615,14 @@ stamps lines with parsed-or-wall-clock times.
   `--learn`) saves it regardless. Both stream every consumed line -- the
   digester sees stdout and stderr alike -- to the capture file; a failed
   run keeps it and prints the recovery command ("Capture durability").
+- `auto -- CMD [ARGS...]` -- the magic default mode: a bare `lpi CMD
+  [ARGS...]` routes here (see "Automatic mode"). Every stored model is fed
+  to the fit chooser; the status line shows `identifying pattern` until
+  the lock, then the normal bar with a `ref <label>` segment. Always
+  learning: exit 0 merges into the fitted pattern (final rate >=
+  mergeRate) or records a new `auto.<hash16>` pattern; a non-zero exit is
+  never merged and keeps the capture file with the recovery command,
+  exactly like `run --learn`. The only flag is `--db`.
 - `learn --key K [--replace] LOG...` -- digests completed logs
   (gzip-transparent, capture-file-transparent), prints per-log stats and
   the model summary, then removes any ingested captures living in the
