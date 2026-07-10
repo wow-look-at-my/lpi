@@ -46,7 +46,8 @@ func resetCommand(c *cobra.Command) {
 }
 
 // execLpi runs the root command in-process and returns stdout, stderr, and
-// the execution error.
+// the execution error. Args pass through routeArgs, so tests exercise the
+// production magic-mode routing.
 func execLpi(t *testing.T, stdin io.Reader, args ...string) (string, string, error) {
 	t.Helper()
 	resetCommand(rootCmd)
@@ -57,7 +58,7 @@ func execLpi(t *testing.T, stdin io.Reader, args ...string) (string, string, err
 	rootCmd.SetIn(stdin)
 	rootCmd.SetOut(&out)
 	rootCmd.SetErr(&errOut)
-	rootCmd.SetArgs(args)
+	rootCmd.SetArgs(routeArgs(args))
 	err := rootCmd.Execute()
 	return out.String(), errOut.String(), err
 }
@@ -160,9 +161,9 @@ var (
 	// requires that text to be the entire line. Glue only ever happens at a
 	// status line's seams, so a marked line that is not a full status line
 	// is exactly the regression: status and child output sharing a line.
-	statusMark = regexp.MustCompile(`recording baseline  lines|\] \d+\.\d%  units `)
-	statusFull = regexp.MustCompile(`^(recording baseline  lines \d+(  elapsed \S+)?` +
-		`|\[[=> ]+\] \d+\.\d%  units .*  match \d+%)$`)
+	statusMark = regexp.MustCompile(`recording baseline  lines|identifying pattern  lines|\] \d+\.\d%  units `)
+	statusFull = regexp.MustCompile(`^((recording baseline|identifying pattern)  lines \d+(  elapsed \S+)?` +
+		`|\[[=> ]+\] \d+\.\d%  units .*  match \d+%(  ref .*)?)$`)
 )
 
 // assertStatusOwnsLines fails when any rendered terminal line mixes status

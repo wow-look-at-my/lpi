@@ -218,20 +218,38 @@ func Bar(frac float64, width int) string {
 	return "[" + strings.Repeat("=", filled) + ">" + strings.Repeat(" ", width-filled-1) + "]"
 }
 
+// statusLabelMax caps the ref-label segment of the status line; pattern
+// labels are command lines and can be arbitrarily long.
+const statusLabelMax = 28
+
 // StatusLine renders a single-line live status, e.g.
 //
 //	[========>             ] 38.4%  units 2451/5948 (41.2%)  elapsed 2m14s  eta ~3m35s  pace 1.07x  match 97%
 //
 // The elapsed segment is omitted when elapsed time is unknown, the eta
-// segment when there is no ETA, and the pace segment when pace is 0.
+// segment when there is no ETA, and the pace segment when pace is 0. A
+// snapshot from a locked pattern chooser (Label set) gains a trailing
+// "ref <label>" segment, the label truncated to statusLabelMax bytes.
+// While the chooser is still deciding (Identifying set) there is nothing
+// to draw a bar against yet, so an identifying status is shown, e.g.
+//
+//	identifying pattern  lines 42  elapsed 3s
+//
 // Against an empty reference model (units total 0: a live-learning run
 // recording the first baseline) the bar would be meaningless, so a
 // recording status is shown instead, e.g.
 //
 //	recording baseline  lines 1234  elapsed 2m14s
 //
-// again with the elapsed segment omitted when unknown.
+// in both cases with the elapsed segment omitted when unknown.
 func StatusLine(s progress.Snapshot) string {
+	if s.Identifying {
+		parts := []string{"identifying pattern", fmt.Sprintf("lines %d", s.CurrentLines)}
+		if s.ElapsedKnown {
+			parts = append(parts, "elapsed "+Duration(s.Elapsed))
+		}
+		return strings.Join(parts, "  ")
+	}
 	if s.UnitsTotal == 0 {
 		parts := []string{"recording baseline", fmt.Sprintf("lines %d", s.CurrentLines)}
 		if s.ElapsedKnown {
@@ -253,13 +271,26 @@ func StatusLine(s progress.Snapshot) string {
 		parts = append(parts, fmt.Sprintf("pace %.2fx", s.Pace))
 	}
 	parts = append(parts, fmt.Sprintf("match %.0f%%", s.MatchRate*100))
+	if s.Label != "" {
+		parts = append(parts, "ref "+truncLabel(s.Label, statusLabelMax))
+	}
 	return strings.Join(parts, "  ")
+}
+
+// truncLabel caps a pattern label at max bytes, appending "..." when cut
+// (labels are command lines: ASCII in practice, so byte truncation is fine).
+func truncLabel(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "..."
 }
 
 // Summary renders the multi-line, aligned summary block. It ends with a
 // newline. Against an empty reference model there is nothing to estimate,
 // so a short block notes that the run was recorded as the baseline (line
-// count and elapsed time) instead.
+// count and elapsed time) instead. A snapshot carrying a pattern label
+// (auto mode, locked) gains a final Pattern row naming it.
 func Summary(s progress.Snapshot) string {
 	var b strings.Builder
 	row := func(key, val string) {
@@ -295,6 +326,9 @@ func Summary(s progress.Snapshot) string {
 		row("Reference", fmt.Sprintf("%d units over %s", s.UnitsTotal, Duration(s.RefDuration)))
 	} else {
 		row("Reference", fmt.Sprintf("%d units, no timing data", s.UnitsTotal))
+	}
+	if s.Label != "" {
+		row("Pattern", s.Label)
 	}
 	return b.String()
 }

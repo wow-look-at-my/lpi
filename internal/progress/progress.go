@@ -30,6 +30,13 @@ type Snapshot struct {
 	MatchRate  float64
 	Confidence string // "high" | "medium" | "low" | "none"
 
+	// Identifying is set by the Chooser while it is still deciding which
+	// stored pattern the output belongs to; plain Estimators leave it zero.
+	Identifying bool
+	// Label is the display label of the pattern the Chooser locked onto;
+	// plain Estimators leave it zero.
+	Label string
+
 	CurrentLines, MatchedLines, NovelLines, OverflowLines int
 }
 

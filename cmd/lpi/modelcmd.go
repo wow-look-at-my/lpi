@@ -42,7 +42,7 @@ var modelListCmd = &cobra.Command{
 		}
 		sort.Strings(keys)
 		tw := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
-		fmt.Fprintln(tw, "KEY\tRUNS\tUNITS\tDURATION\tSIZE")
+		fmt.Fprintln(tw, "KEY\tLABEL\tRUNS\tUNITS\tDURATION\tSIZE")
 		for _, key := range keys {
 			path := model.PathForKey(modelDB, key)
 			m, err := model.Load(path)
@@ -57,11 +57,29 @@ var modelListCmd = &cobra.Command{
 			if m.HasTimes {
 				dur = render.Duration(m.RefDuration)
 			}
-			fmt.Fprintf(tw, "%s\t%d\t%d\t%s\t%dB\n",
-				key, len(m.Runs), m.TotalUnits, dur, st.Size())
+			fmt.Fprintf(tw, "%s\t%s\t%d\t%d\t%s\t%dB\n",
+				key, listLabel(m), len(m.Runs), m.TotalUnits, dur, st.Size())
 		}
 		return tw.Flush()
 	},
+}
+
+// listLabelMax caps the LABEL column; invocation labels are command lines
+// and can be arbitrarily long.
+const listLabelMax = 40
+
+// listLabel is the LABEL column value: the most recent invocation,
+// truncated, or "-" for models that never gained one (repeating the key
+// would only add noise next to the KEY column).
+func listLabel(m *model.Model) string {
+	if len(m.Invocations) == 0 {
+		return "-"
+	}
+	label := m.DisplayLabel()
+	if len(label) > listLabelMax {
+		label = label[:listLabelMax] + "..."
+	}
+	return label
 }
 
 var modelShowCmd = &cobra.Command{

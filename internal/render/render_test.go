@@ -112,6 +112,40 @@ func TestStatusLineRecordingBaseline(t *testing.T) {
 	assert.Equal(t, "recording baseline  lines 1234", StatusLine(s))
 }
 
+func TestStatusLineIdentifying(t *testing.T) {
+	s := baselineSnap()
+	s.Identifying = true
+	assert.Equal(t, "identifying pattern  lines 1234  elapsed 2m14s", StatusLine(s))
+
+	s.ElapsedKnown = false
+	assert.Equal(t, "identifying pattern  lines 1234", StatusLine(s))
+}
+
+func TestStatusLineRefLabel(t *testing.T) {
+	s := fullSnap()
+	s.Label = "make -j8"
+	want := "[========>             ] 38.4%  units 2451/5948 (41.2%)  " +
+		"elapsed 2m14s  eta ~3m35s  pace 1.07x  match 97%  ref make -j8"
+	assert.Equal(t, want, StatusLine(s))
+
+	s.Label = "cmake --build build --parallel everything"
+	assert.Contains(t, StatusLine(s), "ref cmake --build build --parall...",
+		"labels longer than 28 bytes are truncated")
+}
+
+func TestSummaryPatternLabel(t *testing.T) {
+	s := fullSnap()
+	s.Label = "make -j8"
+	want := "Progress:    38.4% (time-weighted)\n" +
+		"Units:       2451 / 5948 reference lines matched (41.2%)\n" +
+		"Elapsed:     2m14s\n" +
+		"ETA:         ~3m35s (pace 1.07x vs reference)\n" +
+		"Confidence:  high (97.2% of lines matched; 12 novel, 3 overflow)\n" +
+		"Reference:   5948 units over 5m50s\n" +
+		"Pattern:     make -j8\n"
+	assert.Equal(t, want, Summary(s))
+}
+
 func TestSummaryRecordingBaseline(t *testing.T) {
 	s := baselineSnap()
 	want := "Reference:   none yet (recording baseline)\n" +

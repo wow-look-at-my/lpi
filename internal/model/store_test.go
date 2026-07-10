@@ -42,6 +42,50 @@ func TestSaveLoadRoundtrip(t *testing.T) {
 	}
 }
 
+func TestSaveLoadKeepsInvocations(t *testing.T) {
+	m := New("k")
+	m.AddRun(digestAt(t, "r1", []string{"alpha", "beta"}, []time.Duration{0, time.Second}))
+	m.AddInvocation("make -j8")
+	m.AddInvocation("make")
+
+	path := filepath.Join(t.TempDir(), "k.lpi")
+	require.NoError(t, m.Save(path))
+	got, err := Load(path)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"make", "make -j8"}, got.Invocations)
+	assert.Equal(t, "make", got.DisplayLabel())
+}
+
+// TestLoadOldFormatWithoutInvocations pins version-1 compatibility: a file
+// written before the Invocations field existed (same version, one field
+// fewer) must still load -- gob matches struct fields by name and leaves
+// absent ones zero.
+func TestLoadOldFormatWithoutInvocations(t *testing.T) {
+	type legacyEnvelope struct {
+		Version int
+		Key     string
+		Runs    []*Run
+	}
+	run := digestAt(t, "r1", []string{"alpha", "beta"}, []time.Duration{0, time.Second})
+
+	path := filepath.Join(t.TempDir(), "old.lpi")
+	f, err := os.Create(path)
+	require.NoError(t, err)
+	gz := gzip.NewWriter(f)
+	require.NoError(t, gob.NewEncoder(gz).Encode(legacyEnvelope{
+		Version: 1, Key: "old", Runs: []*Run{run},
+	}))
+	require.NoError(t, gz.Close())
+	require.NoError(t, f.Close())
+
+	got, err := Load(path)
+	require.NoError(t, err)
+	assert.Equal(t, "old", got.Key)
+	require.Len(t, got.Runs, 1)
+	assert.Empty(t, got.Invocations)
+	assert.Equal(t, "old", got.DisplayLabel(), "no invocations falls back to the key")
+}
+
 func TestLoadRejectsUnknownVersion(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "future.lpi")
 	f, err := os.Create(path)
