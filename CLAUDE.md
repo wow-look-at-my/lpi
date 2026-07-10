@@ -41,7 +41,11 @@ internal/
                 autofit.go: the Chooser that fits live output against every
                 stored model (auto mode's lock/switch/merge decisions)
   tailer/       polling file follower (truncation, rotation, appears-late)
-  render/       Bar/StatusLine/Summary strings + TTY-aware Renderer
+  render/       Bar/StatusLine/Summary strings + TTY-aware Renderer;
+                Passthrough coordinates child output with the status line
+                (the two never share a terminal line); Message gives lpi's
+                own out-of-band lines the same discipline and Break ends an
+                abandoned render on a clean line
 testdata/demo/         two complete fake cmake builds + a ~55% partial run,
                        used by cmd tests and README examples
 ```
@@ -67,13 +71,23 @@ testdata/demo/         two complete fake cmake builds + a ~55% partial run,
 ## Key CLI behaviors
 
 - `progress.Estimator` is NOT concurrency-safe: watch/run wrap it (and the
-  renderer) in a mutex; run's child-stderr passthrough shares that mutex via
-  lockedWriter.
+  renderer) in a mutex; run/pipe passthrough writes share that mutex via
+  render's Passthrough writers.
 - Live modes never mix time sources: a detected log-timestamp format wins
   (carry-forward for unparsable lines); otherwise wall clock plus a periodic
   Tick. watch buffers up to 300 lines (or until the first tick) to decide.
 - pipe/run passthrough tees at the reader, so stdout stays byte-faithful
-  even for overlong or binary lines.
+  even for overlong or binary lines. The renderer erases a pending TTY
+  status before passthrough bytes and repaints it after them (moving to a
+  fresh line when the child left a partial one); plain-mode status prints
+  always end with a newline. A status line and child output never share a
+  terminal line. lpi's own out-of-band prints get the same discipline:
+  while a renderer is live, capture warnings, pipe's interrupt notice, and
+  the recovery-command lines go through render.Message via the notify seam
+  in refs.go (renderNotify under the state mutex; plainNotify when no
+  renderer exists, e.g. a json-stream pipe); error paths that abandon
+  rendering call render.Break first, and watch's --json-stream snapshots
+  ride Passthrough so NDJSON never mixes with a painted status.
 - run learns on exit code 0 (or always, with --learn-on-failure, which
   implies --learn) and propagates the child's exit code (128+N when signal
   N killed it, e.g. SIGTERM -> 143); pipe learns on clean EOF (documented

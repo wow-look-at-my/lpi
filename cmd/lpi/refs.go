@@ -103,6 +103,30 @@ func bootstrapNotice(w io.Writer, key string) {
 	fmt.Fprintf(w, "no model for key %q yet -- recording baseline run\n", key)
 }
 
+// notify delivers one of lpi's own out-of-band lines -- a capture warning,
+// pipe's interrupt notice, the printed recovery command. Live paths back it
+// with the renderer's Message (called under the same mutex that serializes
+// rendering) so the line never lands glued onto a painted status or a
+// partial child line; paths with no renderer print plainly.
+type notify func(format string, args ...any)
+
+// plainNotify prints out-of-band lines directly to w, one whole line each,
+// for paths with no active renderer (e.g. a json-stream pipe).
+func plainNotify(w io.Writer) notify {
+	return func(format string, args ...any) {
+		fmt.Fprintf(w, format+"\n", args...)
+	}
+}
+
+// renderNotify routes out-of-band lines through r.Message so they respect
+// the status line's never-share-a-line discipline. While other goroutines
+// are live, callers must hold the mutex that serializes the renderer.
+func renderNotify(r *render.Renderer) notify {
+	return func(format string, args ...any) {
+		r.Message(fmt.Sprintf(format, args...))
+	}
+}
+
 // availableKeys names the models present in db, for error messages.
 func availableKeys(db string) string {
 	entries, err := os.ReadDir(db)
@@ -154,10 +178,10 @@ func learnRun(w io.Writer, db, key string, run *model.Run, invocation string) er
 // returning nil (capture disabled) when it cannot be created -- the recovery
 // feature must never break the primary flow. All *CaptureWriter methods are
 // nil-safe, so callers need no branches.
-func newCapture(w io.Writer, db, key, source string) *model.CaptureWriter {
+func newCapture(msg notify, db, key, source string) *model.CaptureWriter {
 	cw, err := model.NewCaptureWriter(db, key, source)
 	if err != nil {
-		fmt.Fprintf(w, "warning: capture file disabled: %v\n", err)
+		msg("warning: capture file disabled: %v", err)
 		return nil
 	}
 	return cw
@@ -166,25 +190,25 @@ func newCapture(w io.Writer, db, key, source string) *model.CaptureWriter {
 // keepCapture closes the capture file, leaves it in place, and prints the
 // recovery instructions used by run and pipe when a learning run fails.
 // A nil capture (creation failed earlier) prints nothing.
-func keepCapture(w io.Writer, cw *model.CaptureWriter, db, key string) {
+func keepCapture(msg notify, cw *model.CaptureWriter, db, key string) {
 	if cw == nil {
 		return
 	}
 	_ = cw.Close()
-	fmt.Fprintf(w, "captured log kept: %s\n", cw.Path())
-	fmt.Fprintf(w, "learn it later with: lpi learn --key %s --db %s %s\n", key, db, cw.Path())
+	msg("captured log kept: %s", cw.Path())
+	msg("learn it later with: lpi learn --key %s --db %s %s", key, db, cw.Path())
 }
 
 // keepOrDiscardCapture keeps the capture file with recovery instructions
 // when dig holds anything recoverable, and removes it otherwise: with fewer
 // than 2 nonempty lines the printed recovery command could never succeed,
 // and a hint that cannot work is worse than none.
-func keepOrDiscardCapture(w io.Writer, dig *model.Digester, cw *model.CaptureWriter, db, key string) {
+func keepOrDiscardCapture(msg notify, dig *model.Digester, cw *model.CaptureWriter, db, key string) {
 	if _, err := dig.Finish(); err != nil {
 		cw.Discard()
 		return
 	}
-	keepCapture(w, cw, db, key)
+	keepCapture(msg, cw, db, key)
 }
 
 // jsonSnapshot is the stable JSON form of a progress snapshot, shared by

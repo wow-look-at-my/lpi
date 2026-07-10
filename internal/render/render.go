@@ -1,13 +1,17 @@
 // Package render turns progress snapshots into terminal output: an in-place
 // status line on TTYs, throttled plain lines otherwise, and a multi-line
-// summary block.
+// summary block. Passthrough coordinates child output with the status line
+// so the two never share a terminal line; Message and Break extend the same
+// discipline to the caller's own out-of-band lines and to abandoned renders.
 package render
 
 import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/wow-look-at-my/log-progress-indicator/internal/progress"
@@ -32,13 +36,17 @@ var IsTTY = func(w io.Writer) bool {
 const barWidth = 22
 
 // Renderer writes live status lines to one writer. It is not safe for
-// concurrent use; callers serialize Update/Close.
+// concurrent use; callers serialize Update/Close/Message/Break (and writes
+// through Passthrough share the same mutex).
 type Renderer struct {
 	w         io.Writer
 	tty       bool
 	started   bool
 	lastPlain time.Time
 	lastPct   int
+	last      string // last painted TTY status, repainted after passthrough writes
+	painted   bool   // TTY: a status line is currently on the terminal
+	midline   bool   // passthrough bytes left the display cursor inside a partial child line
 }
 
 // New returns a Renderer for w, choosing TTY or plain mode via IsTTY.
@@ -51,7 +59,7 @@ func New(w io.Writer) *Renderer {
 // PlainInterval or when the whole progress percent changes.
 func (r *Renderer) Update(s progress.Snapshot) {
 	if r.tty {
-		fmt.Fprintf(r.w, "\r\x1b[K%s", StatusLine(s))
+		r.paint(StatusLine(s))
 		return
 	}
 	pct := int(s.Progress * 100)
@@ -62,16 +70,133 @@ func (r *Renderer) Update(s progress.Snapshot) {
 	r.started = true
 	r.lastPct = pct
 	r.lastPlain = now
-	fmt.Fprintf(r.w, "%s\n", StatusLine(s))
+	r.printPlain(StatusLine(s))
 }
 
 // Close prints the final status line, ending the in-place repaint on a TTY.
 func (r *Renderer) Close(final progress.Snapshot) {
 	if r.tty {
-		fmt.Fprintf(r.w, "\r\x1b[K%s\n", StatusLine(final))
+		r.paint(StatusLine(final))
+		fmt.Fprint(r.w, "\n")
+		r.painted = false
+		r.last = ""
 		return
 	}
-	fmt.Fprintf(r.w, "%s\n", StatusLine(final))
+	r.printPlain(StatusLine(final))
+}
+
+// Message writes one of the caller's own out-of-band lines (a warning, an
+// interrupt notice, recovery instructions) with the same never-share-a-line
+// discipline as the status: a painted TTY status is erased first, a partial
+// child passthrough line is terminated, and the message ends with a newline.
+// The status is not repainted -- the next Update (or the next complete
+// passthrough line) brings it back -- so a message printed just before exit
+// leaves the terminal on a clean line. Callers serialize Message with
+// Update/Close and passthrough writes (the same mutex convention).
+func (r *Renderer) Message(msg string) {
+	if r.painted {
+		fmt.Fprint(r.w, "\r\x1b[K")
+		r.painted = false
+	}
+	if r.midline {
+		fmt.Fprint(r.w, "\n")
+		r.midline = false
+	}
+	fmt.Fprintf(r.w, "%s\n", msg)
+}
+
+// Break ends any in-progress terminal line -- a painted TTY status or a
+// partial child passthrough line -- so following output (e.g. an error
+// report printed by the CLI layer) starts on a fresh line. Unlike Close it
+// paints no final status; it is for paths that abandon rendering. The
+// painted status stays visible in scrollback, committed by the newline.
+func (r *Renderer) Break() {
+	if r.painted || r.midline {
+		fmt.Fprint(r.w, "\n")
+	}
+	r.painted = false
+	r.midline = false
+	r.last = ""
+}
+
+// paint draws line as the current TTY status. A pending status is repainted
+// in place (carriage return plus erase-to-EOL); when passthrough bytes left
+// the cursor inside a partial child line, the status moves to a fresh line
+// first -- painting in place would glue it onto the child's text.
+func (r *Renderer) paint(line string) {
+	if r.midline {
+		fmt.Fprint(r.w, "\n")
+		r.midline = false
+	}
+	fmt.Fprintf(r.w, "\r\x1b[K%s", line)
+	r.last = line
+	r.painted = true
+}
+
+// printPlain writes one complete status line in plain mode. A status print
+// always owns a whole line: it ends with a newline, and a partial child line
+// pending on the same stream is terminated first.
+func (r *Renderer) printPlain(line string) {
+	if r.midline {
+		fmt.Fprint(r.w, "\n")
+		r.midline = false
+	}
+	fmt.Fprintf(r.w, "%s\n", line)
+}
+
+// Passthrough wraps dst so that child output forwarded through it never
+// shares a terminal line with the status line: a pending TTY status is
+// erased before the child's bytes and repainted after them, and bytes ending
+// mid-line mark the display so the next status starts on a fresh line
+// instead of the child's partial one. The child's bytes themselves reach dst
+// untouched. Writes lock mu -- the same mutex the caller uses to serialize
+// Update/Close -- so passthrough and rendering never interleave. dst is
+// returned unwrapped (and stays lock-free) when its output cannot collide
+// with the status line: neither the renderer's own writer nor a TTY shown
+// alongside a TTY status.
+func (r *Renderer) Passthrough(dst io.Writer, mu *sync.Mutex) io.Writer {
+	if !sameWriter(dst, r.w) && !(r.tty && IsTTY(dst)) {
+		return dst
+	}
+	return &passthroughWriter{r: r, dst: dst, mu: mu}
+}
+
+// sameWriter reports whether a and b are the same writer. An uncomparable
+// dynamic type cannot be tested with ==, so it reports false rather than
+// panicking.
+func sameWriter(a, b io.Writer) bool {
+	return reflect.TypeOf(a).Comparable() && a == b
+}
+
+// passthroughWriter is the coordinated writer built by Passthrough. Erase
+// and repaint go to the renderer's own stream; p goes to dst byte-for-byte.
+type passthroughWriter struct {
+	r   *Renderer
+	dst io.Writer
+	mu  *sync.Mutex
+}
+
+func (pw *passthroughWriter) Write(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+	pw.mu.Lock()
+	defer pw.mu.Unlock()
+	r := pw.r
+	if r.painted {
+		fmt.Fprint(r.w, "\r\x1b[K")
+		r.painted = false
+	}
+	n, err := pw.dst.Write(p)
+	if n > 0 {
+		r.midline = p[n-1] != '\n'
+	}
+	// Repainting onto a partial child line would glue the status to it, so
+	// that case waits for the next Update (which starts on a fresh line).
+	if err == nil && r.tty && !r.midline && r.last != "" {
+		r.paint(r.last)
+	}
+	return n, err
 }
 
 // Bar renders a "[=====>    ]" progress bar with the given interior width.

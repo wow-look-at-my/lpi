@@ -57,11 +57,18 @@ wall clock is used. Stop with Ctrl-C to get a final summary.`,
 		w := &watcher{
 			est:        progress.NewEstimator(m),
 			r:          render.New(cmd.ErrOrStderr()),
-			jsonW:      cmd.OutOrStdout(),
 			jsonStream: watchOpts.jsonStream,
 		}
+		// NDJSON snapshots are coordinated like child passthrough: when
+		// stdout shares a terminal with the stderr status line, a painted
+		// status is erased before each snapshot line and repainted after it
+		// (a piped stdout is returned unwrapped).
+		w.jsonW = w.r.Passthrough(cmd.OutOrStdout(), &w.mu)
 		w.loop(lines)
 		if err := <-tailErr; err != nil {
+			// Rendering is abandoned, not closed: end any painted status so
+			// the error report starts on a fresh line.
+			w.r.Break()
 			return err
 		}
 		w.finish(cmd)
@@ -70,7 +77,8 @@ wall clock is used. Stop with Ctrl-C to get a final summary.`,
 }
 
 // watcher holds the live state of one watch invocation. The mutex
-// serializes estimator access (progress.Estimator is not concurrency-safe).
+// serializes estimator access (progress.Estimator is not concurrency-safe)
+// and doubles as the coordination lock of the NDJSON passthrough writer.
 type watcher struct {
 	mu         sync.Mutex
 	est        *progress.Estimator

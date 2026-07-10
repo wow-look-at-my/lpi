@@ -84,18 +84,21 @@ yet) and the next invocation gets a real estimate. With a --ref, a missing
 		if bootstrap {
 			bootstrapNotice(errW, runOpts.rf.key)
 		}
-		lv := &liveRun{est: progress.NewEstimator(m), r: render.New(errW), warnW: errW}
+		r := render.New(errW)
+		lv := &liveRun{est: progress.NewEstimator(m), r: r, msg: renderNotify(r)}
 		if learning {
 			source := sourceName("run", args)
 			lv.dig = model.NewDigester(source, nil)
-			lv.capture = newCapture(errW, runOpts.rf.db, runOpts.rf.key, source)
+			lv.capture = newCapture(lv.msg, runOpts.rf.db, runOpts.rf.key, source)
 		}
 		exitCode, err := lv.execute(cmd, args)
 		if err != nil {
-			// Transport failure (e.g. the command could not start): keep
-			// whatever was captured if it is worth keeping.
+			// Transport failure (e.g. the command could not start): end any
+			// in-progress status line so the error report starts fresh, and
+			// keep whatever was captured if it is worth keeping.
+			lv.r.Break()
 			if lv.dig != nil {
-				keepOrDiscardCapture(errW, lv.dig, lv.capture, runOpts.rf.db, runOpts.rf.key)
+				keepOrDiscardCapture(lv.msg, lv.dig, lv.capture, runOpts.rf.db, runOpts.rf.key)
 			}
 			return err
 		}
@@ -126,7 +129,7 @@ func (lv *liveRun) finishLearn(errW io.Writer, exitCode int, args []string) erro
 	db, key := runOpts.rf.db, runOpts.rf.key
 	if exitCode != 0 && !runOpts.learnOnFailure {
 		fmt.Fprintf(errW, "exit status %d -- run not learned\n", exitCode)
-		keepOrDiscardCapture(errW, lv.dig, lv.capture, db, key)
+		keepOrDiscardCapture(lv.msg, lv.dig, lv.capture, db, key)
 		return nil
 	}
 	run, err := lv.dig.Finish()
@@ -136,7 +139,7 @@ func (lv *liveRun) finishLearn(errW io.Writer, exitCode int, args []string) erro
 		return fmt.Errorf("run not learned: %w", err)
 	}
 	if err := learnRun(errW, db, key, run, strings.Join(args, " ")); err != nil {
-		keepCapture(errW, lv.capture, db, key)
+		keepCapture(lv.msg, lv.capture, db, key)
 		return err
 	}
 	lv.capture.Discard()
@@ -154,15 +157,17 @@ type feeder interface {
 
 // liveRun is the shared live state of one run invocation. The mutex
 // serializes the estimator, digester, capture writer, and renderer across
-// the stdout consumer, stderr consumer, and ticker goroutines; stderr
-// passthrough writes share it via lockedWriter.
+// the stdout consumer, stderr consumer, and ticker goroutines; passthrough
+// writes on both streams share it via the renderer's Passthrough writers,
+// and lpi's own out-of-band lines go through msg (the renderer's Message)
+// under the same mutex.
 type liveRun struct {
 	mu      sync.Mutex
 	est     feeder
 	dig     *model.Digester
 	capture *model.CaptureWriter
 	r       *render.Renderer
-	warnW   io.Writer
+	msg     notify
 }
 
 // execute spawns the child and pumps its output until it exits, returning
@@ -192,15 +197,20 @@ func (lv *liveRun) execute(cmd *cobra.Command, args []string) (int, error) {
 		}
 	}()
 
+	// Both passthrough streams coordinate with the renderer under lv.mu, so
+	// a painted status line is erased before child bytes reach the terminal
+	// and repainted after them -- the two never share a terminal line.
+	outW := lv.r.Passthrough(cmd.OutOrStdout(), &lv.mu)
+	errW := lv.r.Passthrough(cmd.ErrOrStderr(), &lv.mu)
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		lv.consume(outPipe, cmd.OutOrStdout())
+		lv.consume(outPipe, outW)
 	}()
 	go func() {
 		defer wg.Done()
-		lv.consume(errPipe, &lockedWriter{mu: &lv.mu, w: cmd.ErrOrStderr()})
+		lv.consume(errPipe, errW)
 	}()
 
 	tickStop := make(chan struct{})
@@ -270,25 +280,12 @@ func (lv *liveRun) consume(pipe io.Reader, passthrough io.Writer) {
 		if lv.dig != nil {
 			lv.dig.LineAt(sc.Text(), now)
 			if err := lv.capture.Add(sc.Text(), now); err != nil {
-				fmt.Fprintf(lv.warnW, "warning: capture file disabled: %v\n", err)
+				lv.msg("warning: capture file disabled: %v", err)
 			}
 		}
 		lv.r.Update(lv.est.Snapshot())
 		lv.mu.Unlock()
 	}
-}
-
-// lockedWriter serializes writes with a shared mutex so child-stderr
-// passthrough and the renderer never interleave mid-write.
-type lockedWriter struct {
-	mu *sync.Mutex
-	w  io.Writer
-}
-
-func (lw *lockedWriter) Write(p []byte) (int, error) {
-	lw.mu.Lock()
-	defer lw.mu.Unlock()
-	return lw.w.Write(p)
 }
 
 func init() {

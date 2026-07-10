@@ -53,23 +53,26 @@ explicit form 'lpi -- CMD [ARGS...]'.`,
 			return err
 		}
 		ch := progress.NewChooser(cands)
-		lv := &liveRun{est: ch, r: render.New(errW), warnW: errW}
+		r := render.New(errW)
+		lv := &liveRun{est: ch, r: r, msg: renderNotify(r)}
 		source := sourceName("auto", args)
 		lv.dig = model.NewDigester(source, nil)
-		lv.capture = newCapture(errW, autoOpts.db, "auto", source)
+		lv.capture = newCapture(lv.msg, autoOpts.db, "auto", source)
 
 		exitCode, err := lv.execute(cmd, args)
 		if err != nil {
-			// Transport failure (e.g. the command could not start): keep
-			// whatever was captured if it is worth keeping.
-			keepAutoCapture(errW, ch, lv.dig, lv.capture, autoOpts.db)
+			// Transport failure (e.g. the command could not start): end any
+			// in-progress status line so the error report starts fresh, and
+			// keep whatever was captured if it is worth keeping.
+			lv.r.Break()
+			keepAutoCapture(lv.msg, ch, lv.dig, lv.capture, autoOpts.db)
 			return err
 		}
 
 		final := lv.est.Snapshot()
 		lv.r.Close(final)
 		fmt.Fprint(errW, render.Summary(final))
-		if err := finishAutoLearn(errW, autoOpts.db, args, exitCode, ch, lv.dig, lv.capture); err != nil {
+		if err := finishAutoLearn(errW, lv.msg, autoOpts.db, args, exitCode, ch, lv.dig, lv.capture); err != nil {
 			return err
 		}
 		if exitCode != 0 {
@@ -122,13 +125,13 @@ func autoRecoveryKey(ch *progress.Chooser, run *model.Run) string {
 // dig holds anything recoverable, and removes it otherwise. It is
 // keepOrDiscardCapture with the key computed after Finish: the auto
 // recovery key needs the finished run.
-func keepAutoCapture(errW io.Writer, ch *progress.Chooser, dig *model.Digester, capture *model.CaptureWriter, db string) {
+func keepAutoCapture(msg notify, ch *progress.Chooser, dig *model.Digester, capture *model.CaptureWriter, db string) {
 	run, err := dig.Finish()
 	if err != nil {
 		capture.Discard()
 		return
 	}
-	keepCapture(errW, capture, db, autoRecoveryKey(ch, run))
+	keepCapture(msg, capture, db, autoRecoveryKey(ch, run))
 }
 
 // finishAutoLearn completes the always-learning side of an auto run. A
@@ -139,11 +142,13 @@ func keepAutoCapture(errW io.Writer, ch *progress.Chooser, dig *model.Digester, 
 // run too short to digest (<2 nonempty lines) has nothing to learn: a
 // one-line notice, not an error, so the child's exit code 0 survives. A
 // failed run is never merged: the capture file is kept and the recovery
-// command printed, exactly like run --learn.
-func finishAutoLearn(errW io.Writer, db string, args []string, exitCode int, ch *progress.Chooser, dig *model.Digester, capture *model.CaptureWriter) error {
+// command printed, exactly like run --learn. Rendering is closed by the
+// time this runs; direct errW prints are fine, but the shared capture
+// helpers take the notify seam, so msg rides along.
+func finishAutoLearn(errW io.Writer, msg notify, db string, args []string, exitCode int, ch *progress.Chooser, dig *model.Digester, capture *model.CaptureWriter) error {
 	if exitCode != 0 {
 		fmt.Fprintf(errW, "exit status %d -- run not learned\n", exitCode)
-		keepAutoCapture(errW, ch, dig, capture, db)
+		keepAutoCapture(msg, ch, dig, capture, db)
 		return nil
 	}
 	run, err := dig.Finish()
@@ -159,7 +164,7 @@ func finishAutoLearn(errW io.Writer, db string, args []string, exitCode int, ch 
 	invocation := strings.Join(args, " ")
 	if key, _, ok := ch.MergeTarget(); ok {
 		if err := learnRun(errW, db, key, run, invocation); err != nil {
-			keepCapture(errW, capture, db, key)
+			keepCapture(msg, capture, db, key)
 			return err
 		}
 		capture.Discard()
@@ -171,7 +176,7 @@ func finishAutoLearn(errW io.Writer, db string, args []string, exitCode int, ch 
 		// output shape was recorded before, so it IS the same pattern
 		// (this also catches runs too short to ever lock).
 		if err := learnRun(errW, db, id, run, invocation); err != nil {
-			keepCapture(errW, capture, db, id)
+			keepCapture(msg, capture, db, id)
 			return err
 		}
 		capture.Discard()
@@ -181,7 +186,7 @@ func finishAutoLearn(errW io.Writer, db string, args []string, exitCode int, ch 
 	m.AddInvocation(invocation)
 	m.AddRun(run)
 	if err := m.Save(model.PathForKey(db, id)); err != nil {
-		keepCapture(errW, capture, db, id)
+		keepCapture(msg, capture, db, id)
 		return err
 	}
 	fmt.Fprintf(errW, "recorded new pattern %q (%s) -- %d lines, %s\n",

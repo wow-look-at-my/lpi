@@ -6,14 +6,17 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/wow-look-at-my/log-progress-indicator/internal/model"
+	"github.com/wow-look-at-my/log-progress-indicator/internal/render"
 )
 
 const (
@@ -106,4 +109,78 @@ func parseJSONLine(t *testing.T, line string) map[string]any {
 	var m map[string]any
 	require.NoError(t, json.Unmarshal([]byte(line), &m), "not valid JSON: %q", line)
 	return m
+}
+
+// forceTTY pins render.IsTTY to a fixed answer for the duration of the test.
+func forceTTY(t *testing.T, tty bool) {
+	t.Helper()
+	old := render.IsTTY
+	render.IsTTY = func(io.Writer) bool { return tty }
+	t.Cleanup(func() { render.IsTTY = old })
+}
+
+// renderScrollback replays raw terminal bytes -- '\n' commits a line, '\r'
+// returns to column 0, and ESC[K erases from the cursor to end of line --
+// and returns each line as it looked when committed, plus the final
+// uncommitted line if any. It reproduces what a terminal's scrollback would
+// have shown for the stream.
+func renderScrollback(raw string) []string {
+	var lines []string
+	var cur []byte
+	col := 0
+	for i := 0; i < len(raw); {
+		switch {
+		case raw[i] == '\n':
+			lines = append(lines, string(cur))
+			cur, col = cur[:0], 0
+			i++
+		case raw[i] == '\r':
+			col = 0
+			i++
+		case strings.HasPrefix(raw[i:], "\x1b[K"):
+			cur = cur[:col]
+			i += 3
+		default:
+			if col < len(cur) {
+				cur[col] = raw[i]
+			} else {
+				cur = append(cur, raw[i])
+			}
+			col++
+			i++
+		}
+	}
+	if len(cur) > 0 {
+		lines = append(lines, string(cur))
+	}
+	return lines
+}
+
+var (
+	// statusMark finds live-status text anywhere in a line; statusFull
+	// requires that text to be the entire line. Glue only ever happens at a
+	// status line's seams, so a marked line that is not a full status line
+	// is exactly the regression: status and child output sharing a line.
+	statusMark = regexp.MustCompile(`recording baseline  lines|identifying pattern  lines|\] \d+\.\d%  units `)
+	statusFull = regexp.MustCompile(`^((recording baseline|identifying pattern)  lines \d+(  elapsed \S+)?` +
+		`|\[[=> ]+\] \d+\.\d%  units .*  match \d+%(  ref .*)?)$`)
+)
+
+// assertStatusOwnsLines fails when any rendered terminal line mixes status
+// text with child output (e.g. "...elapsed 3sLocal build detected..."). It
+// also requires at least one intact status line, so the check cannot pass
+// vacuously on output that rendered no status at all.
+func assertStatusOwnsLines(t *testing.T, lines []string) {
+	t.Helper()
+	statuses := 0
+	for _, ln := range lines {
+		if !statusMark.MatchString(ln) {
+			continue
+		}
+		if assert.True(t, statusFull.MatchString(ln),
+			"status text must own its whole line, got %q", ln) {
+			statuses++
+		}
+	}
+	assert.Positive(t, statuses, "no status line rendered at all")
 }
