@@ -45,6 +45,40 @@ func TestPipeWeirdBytesStayIntact(t *testing.T) {
 	assert.Equal(t, weird, out)
 }
 
+// TestPipeTTYStatusNeverGluesToPassthrough covers the TTY half of the
+// glued-status bug for pipe: stdout must stay byte-faithful (no rendering
+// escapes leaking in) and the stderr status line must never share a
+// rendered terminal line with forwarded text, even when the input ends with
+// a partial line.
+func TestPipeTTYStatusNeverGluesToPassthrough(t *testing.T) {
+	db := seedDemoModel(t)
+	forceTTY(t, true)
+
+	input := "alpha compile line\nbeta compile line\ngamma partial"
+	out, errOut, err := execLpi(t, strings.NewReader(input), "pipe", "--db", db, "--key", "demo")
+	require.NoError(t, err)
+
+	assert.Equal(t, input, out, "stdout must stay byte-faithful under TTY rendering")
+	assertStatusOwnsLines(t, renderScrollback(errOut))
+}
+
+// TestPipePlainStatusLinesAreWholeLines locks the plain-mode discipline for
+// pipe: complete status lines only, no escape sequences.
+func TestPipePlainStatusLinesAreWholeLines(t *testing.T) {
+	db := seedDemoModel(t)
+	shortTicks(t) // PlainInterval = 0: a status line per update
+	forceTTY(t, false)
+
+	input := "alpha compile line\nbeta compile line\n"
+	out, errOut, err := execLpi(t, strings.NewReader(input), "pipe", "--db", db, "--key", "demo")
+	require.NoError(t, err)
+
+	assert.Equal(t, input, out)
+	assert.NotContains(t, errOut, "\x1b", "plain mode must not emit escape sequences")
+	assert.NotContains(t, errOut, "\r")
+	assertStatusOwnsLines(t, strings.Split(strings.TrimSuffix(errOut, "\n"), "\n"))
+}
+
 func TestPipeJSONStream(t *testing.T) {
 	db := seedDemoModel(t)
 	data, err := os.ReadFile(demoPartial)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -221,6 +222,148 @@ func TestRendererPlainIntervalElapsed(t *testing.T) {
 	r.Update(s)
 	r.Update(s)
 	assert.Equal(t, StatusLine(s)+"\n"+StatusLine(s)+"\n", buf.String())
+}
+
+func TestPassthroughTTYEraseAndRepaint(t *testing.T) {
+	forceTTY(t, true)
+	var buf bytes.Buffer
+	r := New(&buf)
+	pt := r.Passthrough(&buf, &sync.Mutex{})
+	s := fullSnap()
+	line := StatusLine(s)
+
+	// Child bytes before any status: forwarded untouched, nothing to erase
+	// or repaint.
+	_, err := pt.Write([]byte("early\n"))
+	require.NoError(t, err)
+	assert.Equal(t, "early\n", buf.String())
+	buf.Reset()
+
+	r.Update(s)
+	assert.Equal(t, "\r\x1b[K"+line, buf.String())
+	buf.Reset()
+
+	// A complete child line: erase first, child bytes untouched, repaint
+	// after -- the status never shares the child's line.
+	_, err = pt.Write([]byte("child\n"))
+	require.NoError(t, err)
+	assert.Equal(t, "\r\x1b[K"+"child\n"+"\r\x1b[K"+line, buf.String())
+	buf.Reset()
+
+	// A partial child line: the status stays down, since repainting would
+	// glue it onto the unterminated child text.
+	_, err = pt.Write([]byte("part"))
+	require.NoError(t, err)
+	assert.Equal(t, "\r\x1b[K"+"part", buf.String())
+	buf.Reset()
+
+	// The next paint starts on a fresh line instead of the partial one.
+	r.Update(s)
+	assert.Equal(t, "\n"+"\r\x1b[K"+line, buf.String())
+	buf.Reset()
+
+	// The child line's remainder lands at column 0 of an erased line.
+	_, err = pt.Write([]byte("rest\n"))
+	require.NoError(t, err)
+	assert.Equal(t, "\r\x1b[K"+"rest\n"+"\r\x1b[K"+line, buf.String())
+	buf.Reset()
+
+	r.Close(s)
+	assert.Equal(t, "\r\x1b[K"+line+"\n", buf.String())
+}
+
+func TestPassthroughTTYCloseAfterPartialLine(t *testing.T) {
+	forceTTY(t, true)
+	var buf bytes.Buffer
+	r := New(&buf)
+	pt := r.Passthrough(&buf, &sync.Mutex{})
+	s := fullSnap()
+
+	r.Update(s)
+	_, err := pt.Write([]byte("no trailing newline"))
+	require.NoError(t, err)
+	buf.Reset()
+
+	// Close must not paint the final status onto the partial child line.
+	r.Close(s)
+	assert.Equal(t, "\n"+"\r\x1b[K"+StatusLine(s)+"\n", buf.String())
+}
+
+func TestPassthroughPlainStatusOwnsWholeLines(t *testing.T) {
+	forceTTY(t, false)
+	old := PlainInterval
+	PlainInterval = 0 // every update qualifies
+	t.Cleanup(func() { PlainInterval = old })
+
+	var buf bytes.Buffer
+	r := New(&buf)
+	pt := r.Passthrough(&buf, &sync.Mutex{})
+	s := fullSnap()
+	line := StatusLine(s)
+
+	r.Update(s)
+	assert.Equal(t, line+"\n", buf.String(), "plain status prints end with a newline")
+	buf.Reset()
+
+	// Complete child lines pass through with no decoration at all.
+	_, err := pt.Write([]byte("child\n"))
+	require.NoError(t, err)
+	assert.Equal(t, "child\n", buf.String())
+	buf.Reset()
+
+	// A partial child line is terminated before the next status print.
+	_, err = pt.Write([]byte("part"))
+	require.NoError(t, err)
+	r.Update(s)
+	assert.Equal(t, "part"+"\n"+line+"\n", buf.String())
+	buf.Reset()
+
+	r.Close(s)
+	assert.Equal(t, line+"\n", buf.String(), "Close ends with a newline in plain mode")
+}
+
+func TestPassthroughSeparateTTYStreams(t *testing.T) {
+	forceTTY(t, true) // both the status stream and dst count as TTYs
+	var status, out bytes.Buffer
+	r := New(&status)
+	pt := r.Passthrough(&out, &sync.Mutex{})
+	s := fullSnap()
+	line := StatusLine(s)
+
+	r.Update(s)
+	_, err := pt.Write([]byte("stdout line\n"))
+	require.NoError(t, err)
+	_, err = pt.Write([]byte("partial"))
+	require.NoError(t, err)
+	r.Update(s)
+
+	assert.Equal(t, "stdout line\npartial", out.String(),
+		"child bytes reach their own stream byte-for-byte")
+	assert.Equal(t, "\r\x1b[K"+line+"\r\x1b[K"+"\r\x1b[K"+line+"\r\x1b[K"+"\n"+"\r\x1b[K"+line,
+		status.String(), "erase and repaint stay on the renderer's stream")
+}
+
+func TestPassthroughUncoordinatedIsUnwrapped(t *testing.T) {
+	forceTTY(t, false)
+	var status, out bytes.Buffer
+	r := New(&status)
+	assert.Same(t, &out, r.Passthrough(&out, &sync.Mutex{}),
+		"a non-TTY foreign stream needs no coordination")
+	assert.NotSame(t, &status, r.Passthrough(&status, &sync.Mutex{}),
+		"the renderer's own stream is always coordinated")
+}
+
+// funcWriter is an uncomparable io.Writer used to prove sameWriter cannot
+// panic on writer identity checks.
+type funcWriter func([]byte) (int, error)
+
+func (f funcWriter) Write(p []byte) (int, error) { return f(p) }
+
+func TestPassthroughUncomparableWriter(t *testing.T) {
+	forceTTY(t, false)
+	w := funcWriter(func(p []byte) (int, error) { return len(p), nil })
+	r := New(w)
+	assert.NotPanics(t, func() { r.Passthrough(w, &sync.Mutex{}) })
 }
 
 func TestIsTTYDefault(t *testing.T) {

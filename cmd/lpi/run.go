@@ -143,8 +143,8 @@ func (lv *liveRun) finishLearn(errW io.Writer, exitCode int) error {
 
 // liveRun is the shared live state of one run invocation. The mutex
 // serializes the estimator, digester, capture writer, and renderer across
-// the stdout consumer, stderr consumer, and ticker goroutines; stderr
-// passthrough writes share it via lockedWriter.
+// the stdout consumer, stderr consumer, and ticker goroutines; passthrough
+// writes on both streams share it via the renderer's Passthrough writers.
 type liveRun struct {
 	mu      sync.Mutex
 	est     *progress.Estimator
@@ -181,15 +181,20 @@ func (lv *liveRun) execute(cmd *cobra.Command, args []string) (int, error) {
 		}
 	}()
 
+	// Both passthrough streams coordinate with the renderer under lv.mu, so
+	// a painted status line is erased before child bytes reach the terminal
+	// and repainted after them -- the two never share a terminal line.
+	outW := lv.r.Passthrough(cmd.OutOrStdout(), &lv.mu)
+	errW := lv.r.Passthrough(cmd.ErrOrStderr(), &lv.mu)
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		lv.consume(outPipe, cmd.OutOrStdout())
+		lv.consume(outPipe, outW)
 	}()
 	go func() {
 		defer wg.Done()
-		lv.consume(errPipe, &lockedWriter{mu: &lv.mu, w: cmd.ErrOrStderr()})
+		lv.consume(errPipe, errW)
 	}()
 
 	tickStop := make(chan struct{})
@@ -265,19 +270,6 @@ func (lv *liveRun) consume(pipe io.Reader, passthrough io.Writer) {
 		lv.r.Update(lv.est.Snapshot())
 		lv.mu.Unlock()
 	}
-}
-
-// lockedWriter serializes writes with a shared mutex so child-stderr
-// passthrough and the renderer never interleave mid-write.
-type lockedWriter struct {
-	mu *sync.Mutex
-	w  io.Writer
-}
-
-func (lw *lockedWriter) Write(p []byte) (int, error) {
-	lw.mu.Lock()
-	defer lw.mu.Unlock()
-	return lw.w.Write(p)
 }
 
 func init() {

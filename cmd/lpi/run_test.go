@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -355,6 +356,76 @@ func TestCaptureFileAsRef(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "Progress:")
 	assert.Contains(t, out, "Units:")
+}
+
+// glueScript emits interleaved stdout and stderr lines plus mid-line stdout
+// pauses, so live status repaints land between and inside child lines.
+const glueScript = `i=0
+while [ $i -lt 8 ]; do
+	i=$((i+1))
+	echo "out line $i"
+	echo "err line $i" >&2
+	printf "hold%d" $i
+	sleep 0.03
+	echo "-done"
+done`
+
+// glueScriptStdout is the exact byte stream glueScript writes to stdout.
+func glueScriptStdout() string {
+	var b strings.Builder
+	for i := 1; i <= 8; i++ {
+		fmt.Fprintf(&b, "out line %d\nhold%d-done\n", i, i)
+	}
+	return b.String()
+}
+
+// TestRunTTYStatusNeverGluesToChildOutput is the reported bug: on a TTY the
+// status line was painted with no trailing newline and passthrough bytes
+// were appended straight onto it ("recording baseline  lines 35  elapsed
+// 3sLocal build detected..."). The renderer must erase before child bytes,
+// repaint after them, and never paint onto a partial child line.
+func TestRunTTYStatusNeverGluesToChildOutput(t *testing.T) {
+	db := t.TempDir()
+	shortTicks(t)
+	captureExit(t)
+	forceTTY(t, true)
+
+	out, errOut, err := execLpi(t, nil, "run", "--db", db, "--key", "fresh", "--learn", "--",
+		"/bin/sh", "-c", glueScript)
+	require.NoError(t, err)
+
+	assert.Equal(t, glueScriptStdout(), out,
+		"stdout passthrough must stay byte-faithful, with no rendering bytes mixed in")
+
+	lines := renderScrollback(errOut)
+	assertStatusOwnsLines(t, lines)
+	for i := 1; i <= 8; i++ {
+		assert.Contains(t, lines, fmt.Sprintf("err line %d", i),
+			"child stderr lines must render as whole lines")
+	}
+}
+
+// TestRunPlainStatusLinesAreWholeLines locks the plain-mode discipline:
+// every status print is a complete line, and child output never shares one.
+func TestRunPlainStatusLinesAreWholeLines(t *testing.T) {
+	db := seedDemoModel(t)
+	shortTicks(t) // PlainInterval = 0: a status line per update
+	captureExit(t)
+	forceTTY(t, false)
+
+	out, errOut, err := execLpi(t, nil, "run", "--db", db, "--key", "demo", "--",
+		"/bin/sh", "-c", glueScript)
+	require.NoError(t, err)
+
+	assert.Equal(t, glueScriptStdout(), out)
+	assert.NotContains(t, errOut, "\x1b", "plain mode must not emit escape sequences")
+	assert.NotContains(t, errOut, "\r")
+	lines := strings.Split(strings.TrimSuffix(errOut, "\n"), "\n")
+	assertStatusOwnsLines(t, lines)
+	for i := 1; i <= 8; i++ {
+		assert.Contains(t, lines, fmt.Sprintf("err line %d", i),
+			"child stderr lines must stay whole lines")
+	}
 }
 
 func TestRunArgumentValidation(t *testing.T) {

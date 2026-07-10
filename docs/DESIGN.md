@@ -392,6 +392,7 @@ An undelivered trailing partial line is dropped at shutdown.
     func New(w io.Writer) *Renderer
     func (r *Renderer) Update(s progress.Snapshot)
     func (r *Renderer) Close(final progress.Snapshot)
+    func (r *Renderer) Passthrough(dst io.Writer, mu *sync.Mutex) io.Writer
     func Bar(frac float64, width int) string
     func StatusLine(s progress.Snapshot) string
     func Summary(s progress.Snapshot) string
@@ -411,6 +412,19 @@ unknown) and `Summary` renders a three-row block: `Reference: none yet
 it prints a line for the first update, then at most every `PlainInterval`
 or when the whole progress percent changes. `Close` always prints the final
 line.
+
+`Passthrough` is how run and pipe forward child output without ever letting
+it share a terminal line with the status: on a TTY a pending status is
+erased before the child's bytes and repainted after them, and bytes ending
+mid-line make the next paint start on a fresh line instead of gluing onto
+the child's partial one. In plain mode every status print ends with a
+newline, and a partial child line pending on the renderer's own stream is
+terminated before the next print. The child's bytes themselves are never
+modified, buffered, or re-timed -- only lpi's own rendering adapts. Writes
+through the returned writer lock mu, the same mutex the caller serializes
+Update/Close with; a destination that cannot collide with the status stream
+(neither the renderer's own writer nor a TTY alongside a TTY status) is
+returned unwrapped and stays lock-free.
 
 ### cmd/lpi
 

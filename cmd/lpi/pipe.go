@@ -88,8 +88,14 @@ from exit code 0.`,
 
 		// The tee sits at the reader: every byte the line scanner consumes
 		// has already been forwarded, so passthrough stays byte-faithful
-		// even for overlong or binary lines.
-		sc := linescan.NewScanner(io.TeeReader(cmd.InOrStdin(), cmd.OutOrStdout()))
+		// even for overlong or binary lines. The renderer's Passthrough
+		// keeps the status line off the forwarded bytes' terminal lines
+		// when the two streams share a terminal.
+		out := cmd.OutOrStdout()
+		if r != nil {
+			out = r.Passthrough(out, &st.mu)
+		}
+		sc := linescan.NewScanner(io.TeeReader(cmd.InOrStdin(), out))
 		for sc.Scan() {
 			now := time.Now()
 			st.mu.Lock()
