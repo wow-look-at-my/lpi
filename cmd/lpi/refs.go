@@ -206,6 +206,10 @@ type jsonSnapshot struct {
 	MatchedLines       int      `json:"matched_lines"`
 	NovelLines         int      `json:"novel_lines"`
 	OverflowLines      int      `json:"overflow_lines"`
+	// Auto-mode fields; omitted at their zero values so plain estimator
+	// snapshots keep their existing JSON byte-identical.
+	Identifying bool   `json:"identifying,omitempty"`
+	Label       string `json:"pattern,omitempty"`
 }
 
 // writeJSONSnapshot writes s as one JSON object followed by a newline.
@@ -227,6 +231,8 @@ func writeJSONSnapshot(w io.Writer, s progress.Snapshot) error {
 		MatchedLines:       s.MatchedLines,
 		NovelLines:         s.NovelLines,
 		OverflowLines:      s.OverflowLines,
+		Identifying:        s.Identifying,
+		Label:              s.Label,
 	}
 	if s.ETAKind != "none" {
 		eta := s.ETA.Seconds()
