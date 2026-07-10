@@ -71,19 +71,21 @@ from exit code 0.`,
 			bootstrapNotice(errW, pipeOpts.learnKey)
 		}
 		est := progress.NewEstimator(m)
+		var r *render.Renderer
+		msg := plainNotify(errW)
+		if !pipeOpts.jsonStream {
+			r = render.New(errW)
+			msg = renderNotify(r)
+		}
 		st := &pipeLearnState{}
 		var dig *model.Digester
 		var capture *model.CaptureWriter
 		if pipeOpts.learnKey != "" {
 			source := sourceName("pipe", nil)
 			dig = model.NewDigester(source, nil)
-			capture = newCapture(errW, pipeOpts.rf.db, pipeOpts.learnKey, source)
-			stop := st.armInterrupt(errW, dig, capture, pipeOpts.rf.db, pipeOpts.learnKey)
+			capture = newCapture(msg, pipeOpts.rf.db, pipeOpts.learnKey, source)
+			stop := st.armInterrupt(msg, dig, capture, pipeOpts.rf.db, pipeOpts.learnKey)
 			defer stop()
-		}
-		var r *render.Renderer
-		if !pipeOpts.jsonStream {
-			r = render.New(errW)
 		}
 
 		// The tee sits at the reader: every byte the line scanner consumes
@@ -110,7 +112,7 @@ from exit code 0.`,
 			if dig != nil {
 				dig.LineAt(sc.Text(), now)
 				if err := capture.Add(sc.Text(), now); err != nil {
-					fmt.Fprintf(errW, "warning: capture file disabled: %v\n", err)
+					msg("warning: capture file disabled: %v", err)
 				}
 			}
 			s := est.Snapshot()
@@ -135,8 +137,14 @@ from exit code 0.`,
 		st.mu.Unlock()
 
 		if err := sc.Err(); err != nil {
+			// Rendering is abandoned, not closed: end any painted status or
+			// partial passthrough line so the recovery lines and the error
+			// report start fresh.
+			if r != nil {
+				r.Break()
+			}
 			if dig != nil {
-				keepOrDiscardCapture(errW, dig, capture, pipeOpts.rf.db, pipeOpts.learnKey)
+				keepOrDiscardCapture(msg, dig, capture, pipeOpts.rf.db, pipeOpts.learnKey)
 			}
 			return err
 		}
@@ -158,7 +166,7 @@ from exit code 0.`,
 			return fmt.Errorf("run not learned: %w", err)
 		}
 		if err := learnRun(errW, pipeOpts.rf.db, pipeOpts.learnKey, run); err != nil {
-			keepCapture(errW, capture, pipeOpts.rf.db, pipeOpts.learnKey)
+			keepCapture(msg, capture, pipeOpts.rf.db, pipeOpts.learnKey)
 			return err
 		}
 		capture.Discard()
@@ -179,9 +187,11 @@ type pipeLearnState struct {
 // stdin and the unconditional EOF-learn would merge a truncated stream into
 // the model. On a signal the handler keeps the capture file (already
 // durable on disk), reports, and exits 128+N immediately; a signal arriving
-// after the stream completed is ignored. The returned stop func disarms the
+// after the stream completed is ignored. Reporting goes through msg under
+// st.mu -- the mutex the renderer is serialized by -- so the notice never
+// gets glued onto a painted status line. The returned stop func disarms the
 // handler.
-func (st *pipeLearnState) armInterrupt(errW io.Writer, dig *model.Digester, capture *model.CaptureWriter, db, key string) (stop func()) {
+func (st *pipeLearnState) armInterrupt(msg notify, dig *model.Digester, capture *model.CaptureWriter, db, key string) (stop func()) {
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, os.Interrupt, syscall.SIGTERM)
 	go func() {
@@ -195,8 +205,8 @@ func (st *pipeLearnState) armInterrupt(errW io.Writer, dig *model.Digester, capt
 			return
 		}
 		st.interrupted = true
-		fmt.Fprintln(errW, "interrupted -- run not learned")
-		keepOrDiscardCapture(errW, dig, capture, db, key)
+		msg("interrupted -- run not learned")
+		keepOrDiscardCapture(msg, dig, capture, db, key)
 		osExit(128 + signalNumber(s))
 		st.mu.Unlock() // reached only when osExit is stubbed (tests)
 	}()

@@ -80,6 +80,33 @@ func TestWatchTimestampedFile(t *testing.T) {
 	assert.Equal(t, "high", last["confidence"])
 }
 
+// TestWatchJSONStreamTTYKeepsStreamsClean covers watch's own out-of-band
+// stream during active rendering: with both stdout and stderr on a TTY, the
+// NDJSON snapshots are coordinated with the status line (erase before,
+// repaint after), so the JSON stream stays pure and no terminal line mixes
+// status text with a snapshot.
+func TestWatchJSONStreamTTYKeepsStreamsClean(t *testing.T) {
+	db := seedDemoModel(t)
+	shortTicks(t)
+	forceTTY(t, true)
+	cancelWatchAfter(t, 300*time.Millisecond)
+
+	path := filepath.Join(t.TempDir(), "live.log")
+	data, err := os.ReadFile(demoPartial)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, data, 0o644))
+
+	out, errOut, err := execLpi(t, nil, "watch", "--db", db, "--key", "demo",
+		"--interval", "5ms", "--json-stream", path)
+	require.NoError(t, err)
+
+	assert.NotContains(t, out, "\x1b", "rendering bytes must never leak into the NDJSON stream")
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		parseJSONLine(t, line)
+	}
+	assertStatusOwnsLines(t, renderScrollback(errOut))
+}
+
 func TestWatchWallClockMode(t *testing.T) {
 	shortTicks(t)
 	cancelWatchAfter(t, 300*time.Millisecond)

@@ -83,18 +83,21 @@ yet) and the next invocation gets a real estimate. With a --ref, a missing
 		if bootstrap {
 			bootstrapNotice(errW, runOpts.rf.key)
 		}
-		lv := &liveRun{est: progress.NewEstimator(m), r: render.New(errW), warnW: errW}
+		r := render.New(errW)
+		lv := &liveRun{est: progress.NewEstimator(m), r: r, msg: renderNotify(r)}
 		if learning {
 			source := sourceName("run", args)
 			lv.dig = model.NewDigester(source, nil)
-			lv.capture = newCapture(errW, runOpts.rf.db, runOpts.rf.key, source)
+			lv.capture = newCapture(lv.msg, runOpts.rf.db, runOpts.rf.key, source)
 		}
 		exitCode, err := lv.execute(cmd, args)
 		if err != nil {
-			// Transport failure (e.g. the command could not start): keep
-			// whatever was captured if it is worth keeping.
+			// Transport failure (e.g. the command could not start): end any
+			// in-progress status line so the error report starts fresh, and
+			// keep whatever was captured if it is worth keeping.
+			lv.r.Break()
 			if lv.dig != nil {
-				keepOrDiscardCapture(errW, lv.dig, lv.capture, runOpts.rf.db, runOpts.rf.key)
+				keepOrDiscardCapture(lv.msg, lv.dig, lv.capture, runOpts.rf.db, runOpts.rf.key)
 			}
 			return err
 		}
@@ -124,7 +127,7 @@ func (lv *liveRun) finishLearn(errW io.Writer, exitCode int) error {
 	db, key := runOpts.rf.db, runOpts.rf.key
 	if exitCode != 0 && !runOpts.learnOnFailure {
 		fmt.Fprintf(errW, "exit status %d -- run not learned\n", exitCode)
-		keepOrDiscardCapture(errW, lv.dig, lv.capture, db, key)
+		keepOrDiscardCapture(lv.msg, lv.dig, lv.capture, db, key)
 		return nil
 	}
 	run, err := lv.dig.Finish()
@@ -134,7 +137,7 @@ func (lv *liveRun) finishLearn(errW io.Writer, exitCode int) error {
 		return fmt.Errorf("run not learned: %w", err)
 	}
 	if err := learnRun(errW, db, key, run); err != nil {
-		keepCapture(errW, lv.capture, db, key)
+		keepCapture(lv.msg, lv.capture, db, key)
 		return err
 	}
 	lv.capture.Discard()
@@ -144,14 +147,16 @@ func (lv *liveRun) finishLearn(errW io.Writer, exitCode int) error {
 // liveRun is the shared live state of one run invocation. The mutex
 // serializes the estimator, digester, capture writer, and renderer across
 // the stdout consumer, stderr consumer, and ticker goroutines; passthrough
-// writes on both streams share it via the renderer's Passthrough writers.
+// writes on both streams share it via the renderer's Passthrough writers,
+// and lpi's own out-of-band lines go through msg (the renderer's Message)
+// under the same mutex.
 type liveRun struct {
 	mu      sync.Mutex
 	est     *progress.Estimator
 	dig     *model.Digester
 	capture *model.CaptureWriter
 	r       *render.Renderer
-	warnW   io.Writer
+	msg     notify
 }
 
 // execute spawns the child and pumps its output until it exits, returning
@@ -264,7 +269,7 @@ func (lv *liveRun) consume(pipe io.Reader, passthrough io.Writer) {
 		if lv.dig != nil {
 			lv.dig.LineAt(sc.Text(), now)
 			if err := lv.capture.Add(sc.Text(), now); err != nil {
-				fmt.Fprintf(lv.warnW, "warning: capture file disabled: %v\n", err)
+				lv.msg("warning: capture file disabled: %v", err)
 			}
 		}
 		lv.r.Update(lv.est.Snapshot())

@@ -1,7 +1,8 @@
 // Package render turns progress snapshots into terminal output: an in-place
 // status line on TTYs, throttled plain lines otherwise, and a multi-line
 // summary block. Passthrough coordinates child output with the status line
-// so the two never share a terminal line.
+// so the two never share a terminal line; Message and Break extend the same
+// discipline to the caller's own out-of-band lines and to abandoned renders.
 package render
 
 import (
@@ -35,8 +36,8 @@ var IsTTY = func(w io.Writer) bool {
 const barWidth = 22
 
 // Renderer writes live status lines to one writer. It is not safe for
-// concurrent use; callers serialize Update/Close (and writes through
-// Passthrough share the same mutex).
+// concurrent use; callers serialize Update/Close/Message/Break (and writes
+// through Passthrough share the same mutex).
 type Renderer struct {
 	w         io.Writer
 	tty       bool
@@ -82,6 +83,40 @@ func (r *Renderer) Close(final progress.Snapshot) {
 		return
 	}
 	r.printPlain(StatusLine(final))
+}
+
+// Message writes one of the caller's own out-of-band lines (a warning, an
+// interrupt notice, recovery instructions) with the same never-share-a-line
+// discipline as the status: a painted TTY status is erased first, a partial
+// child passthrough line is terminated, and the message ends with a newline.
+// The status is not repainted -- the next Update (or the next complete
+// passthrough line) brings it back -- so a message printed just before exit
+// leaves the terminal on a clean line. Callers serialize Message with
+// Update/Close and passthrough writes (the same mutex convention).
+func (r *Renderer) Message(msg string) {
+	if r.painted {
+		fmt.Fprint(r.w, "\r\x1b[K")
+		r.painted = false
+	}
+	if r.midline {
+		fmt.Fprint(r.w, "\n")
+		r.midline = false
+	}
+	fmt.Fprintf(r.w, "%s\n", msg)
+}
+
+// Break ends any in-progress terminal line -- a painted TTY status or a
+// partial child passthrough line -- so following output (e.g. an error
+// report printed by the CLI layer) starts on a fresh line. Unlike Close it
+// paints no final status; it is for paths that abandon rendering. The
+// painted status stays visible in scrollback, committed by the newline.
+func (r *Renderer) Break() {
+	if r.painted || r.midline {
+		fmt.Fprint(r.w, "\n")
+	}
+	r.painted = false
+	r.midline = false
+	r.last = ""
 }
 
 // paint draws line as the current TTY status. A pending status is repainted

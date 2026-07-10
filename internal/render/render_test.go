@@ -322,6 +322,143 @@ func TestPassthroughPlainStatusOwnsWholeLines(t *testing.T) {
 	assert.Equal(t, line+"\n", buf.String(), "Close ends with a newline in plain mode")
 }
 
+func TestMessageTTY(t *testing.T) {
+	forceTTY(t, true)
+	var buf bytes.Buffer
+	r := New(&buf)
+	pt := r.Passthrough(&buf, &sync.Mutex{})
+	s := fullSnap()
+	line := StatusLine(s)
+
+	// Nothing painted yet: the message is just its own line.
+	r.Message("warning: early")
+	assert.Equal(t, "warning: early\n", buf.String())
+	buf.Reset()
+
+	// A painted status is erased first; the message owns its line and the
+	// status is not repainted until the next Update.
+	r.Update(s)
+	buf.Reset()
+	r.Message("warning: capture file disabled: boom")
+	assert.Equal(t, "\r\x1b[K"+"warning: capture file disabled: boom\n", buf.String())
+	buf.Reset()
+
+	// The next Update repaints on the fresh line left by the message.
+	r.Update(s)
+	assert.Equal(t, "\r\x1b[K"+line, buf.String())
+	buf.Reset()
+
+	// A complete passthrough line after a message also repaints the status.
+	r.Message("notice")
+	buf.Reset()
+	_, err := pt.Write([]byte("child\n"))
+	require.NoError(t, err)
+	assert.Equal(t, "child\n"+"\r\x1b[K"+line, buf.String())
+}
+
+func TestMessageTTYAfterPartialChildLine(t *testing.T) {
+	forceTTY(t, true)
+	var buf bytes.Buffer
+	r := New(&buf)
+	pt := r.Passthrough(&buf, &sync.Mutex{})
+	s := fullSnap()
+
+	r.Update(s)
+	_, err := pt.Write([]byte("partial"))
+	require.NoError(t, err)
+	buf.Reset()
+
+	// The partial child line is terminated before the message: the two
+	// never share a terminal line.
+	r.Message("interrupted -- run not learned")
+	assert.Equal(t, "\n"+"interrupted -- run not learned\n", buf.String())
+}
+
+func TestMessagePlain(t *testing.T) {
+	forceTTY(t, false)
+	old := PlainInterval
+	PlainInterval = 0 // every update qualifies
+	t.Cleanup(func() { PlainInterval = old })
+
+	var buf bytes.Buffer
+	r := New(&buf)
+	pt := r.Passthrough(&buf, &sync.Mutex{})
+	s := fullSnap()
+	line := StatusLine(s)
+
+	// Messages are whole lines between whole status lines.
+	r.Update(s)
+	r.Message("warning: capture file disabled: boom")
+	r.Update(s)
+	assert.Equal(t, line+"\n"+"warning: capture file disabled: boom\n"+line+"\n", buf.String())
+	buf.Reset()
+
+	// A partial child line is terminated before the message.
+	_, err := pt.Write([]byte("part"))
+	require.NoError(t, err)
+	r.Message("notice")
+	assert.Equal(t, "part"+"\n"+"notice\n", buf.String())
+}
+
+func TestBreakTTY(t *testing.T) {
+	forceTTY(t, true)
+	var buf bytes.Buffer
+	r := New(&buf)
+	pt := r.Passthrough(&buf, &sync.Mutex{})
+	s := fullSnap()
+
+	// Nothing in progress: Break emits nothing.
+	r.Break()
+	assert.Empty(t, buf.String())
+
+	// A painted status is committed by the newline, not erased.
+	r.Update(s)
+	buf.Reset()
+	r.Break()
+	assert.Equal(t, "\n", buf.String())
+	buf.Reset()
+
+	// After Break a completed passthrough line does not resurrect the
+	// abandoned status.
+	_, err := pt.Write([]byte("child\n"))
+	require.NoError(t, err)
+	assert.Equal(t, "child\n", buf.String())
+	buf.Reset()
+
+	// A partial child line is terminated too.
+	r.Update(s)
+	_, err = pt.Write([]byte("part"))
+	require.NoError(t, err)
+	buf.Reset()
+	r.Break()
+	assert.Equal(t, "\n", buf.String())
+}
+
+func TestBreakPlain(t *testing.T) {
+	forceTTY(t, false)
+	old := PlainInterval
+	PlainInterval = 0
+	t.Cleanup(func() { PlainInterval = old })
+
+	var buf bytes.Buffer
+	r := New(&buf)
+	pt := r.Passthrough(&buf, &sync.Mutex{})
+	s := fullSnap()
+
+	// Plain statuses already own whole lines: Break after one is a no-op.
+	r.Update(s)
+	buf.Reset()
+	r.Break()
+	assert.Empty(t, buf.String())
+
+	// Only a partial child line needs terminating.
+	_, err := pt.Write([]byte("part"))
+	require.NoError(t, err)
+	buf.Reset()
+	r.Break()
+	assert.Equal(t, "\n", buf.String())
+}
+
 func TestPassthroughSeparateTTYStreams(t *testing.T) {
 	forceTTY(t, true) // both the status stream and dst count as TTYs
 	var status, out bytes.Buffer

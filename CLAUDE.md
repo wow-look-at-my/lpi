@@ -39,7 +39,9 @@ internal/
   tailer/       polling file follower (truncation, rotation, appears-late)
   render/       Bar/StatusLine/Summary strings + TTY-aware Renderer;
                 Passthrough coordinates child output with the status line
-                (the two never share a terminal line)
+                (the two never share a terminal line); Message gives lpi's
+                own out-of-band lines the same discipline and Break ends an
+                abandoned render on a clean line
 testdata/demo/         two complete fake cmake builds + a ~55% partial run,
                        used by cmd tests and README examples
 ```
@@ -75,7 +77,13 @@ testdata/demo/         two complete fake cmake builds + a ~55% partial run,
   status before passthrough bytes and repaints it after them (moving to a
   fresh line when the child left a partial one); plain-mode status prints
   always end with a newline. A status line and child output never share a
-  terminal line.
+  terminal line. lpi's own out-of-band prints get the same discipline:
+  while a renderer is live, capture warnings, pipe's interrupt notice, and
+  the recovery-command lines go through render.Message via the notify seam
+  in refs.go (renderNotify under the state mutex; plainNotify when no
+  renderer exists, e.g. a json-stream pipe); error paths that abandon
+  rendering call render.Break first, and watch's --json-stream snapshots
+  ride Passthrough so NDJSON never mixes with a painted status.
 - run learns on exit code 0 (or always, with --learn-on-failure, which
   implies --learn) and propagates the child's exit code (128+N when signal
   N killed it, e.g. SIGTERM -> 143); pipe learns on clean EOF (documented

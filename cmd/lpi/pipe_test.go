@@ -202,10 +202,14 @@ func TestPipeScannerErrorKeepsCapture(t *testing.T) {
 // TestPipeInterruptKeepsCaptureAndSkipsLearn covers the Ctrl-C race: the
 // same signal that kills the upstream would EOF stdin and trigger the
 // unconditional EOF-learn of a truncated stream. The handler must win: keep
-// the capture, report, and exit 130 without learning.
+// the capture, report, and exit 130 without learning. It runs on a forced
+// TTY, so it also proves the interrupt notice and recovery lines fire
+// through the renderer mid-render: the painted status is erased and each
+// message owns a whole terminal line instead of gluing onto the status.
 func TestPipeInterruptKeepsCaptureAndSkipsLearn(t *testing.T) {
 	db := seedDemoModel(t)
 	code := captureExit(t)
+	forceTTY(t, true)
 
 	// Keep the process alive if the signal beats pipe's handler
 	// registration (the runtime disables the default death while any
@@ -234,6 +238,35 @@ func TestPipeInterruptKeepsCaptureAndSkipsLearn(t *testing.T) {
 	assert.Contains(t, errOut, "learn it later with: lpi learn --key captured --db "+db+" "+files[0])
 	_, err = model.Load(model.PathForKey(db, "captured"))
 	assert.True(t, os.IsNotExist(err), "a truncated stream must never be learned")
+
+	// The terminal scrollback is exactly the three messages: the transient
+	// status was erased before the notice, and no line mixes the two.
+	assert.Equal(t, []string{
+		"interrupted -- run not learned",
+		"captured log kept: " + files[0],
+		"learn it later with: lpi learn --key captured --db " + db + " " + files[0],
+	}, renderScrollback(errOut))
+}
+
+// TestPipeScannerErrorRecoveryOwnsLinesOnTTY drives a mid-stream read error
+// while a TTY status is painted: rendering is abandoned with the status
+// committed on its own line, and the recovery instructions each own a whole
+// line instead of gluing onto the painted status.
+func TestPipeScannerErrorRecoveryOwnsLinesOnTTY(t *testing.T) {
+	db := seedDemoModel(t)
+	forceTTY(t, true)
+
+	boom := errors.New("stdin exploded")
+	stdin := &errAfterReader{data: []byte("alpha line\nbeta line\n"), err: boom}
+	_, errOut, err := execLpi(t, stdin, "pipe", "--db", db, "--key", "demo", "--learn-key", "captured")
+	require.ErrorIs(t, err, boom)
+
+	files := pendingFiles(t, db)
+	require.Len(t, files, 1, "the capture must survive a read error")
+	lines := renderScrollback(errOut)
+	assertStatusOwnsLines(t, lines)
+	assert.Contains(t, lines, "captured log kept: "+files[0])
+	assert.Contains(t, lines, "learn it later with: lpi learn --key captured --db "+db+" "+files[0])
 }
 
 // TestPipeLearnSaveFailureKeepsCapture drives the save to fail (model file

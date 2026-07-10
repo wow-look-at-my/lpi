@@ -337,6 +337,39 @@ func TestRunCaptureDisabledWarning(t *testing.T) {
 	assert.NotContains(t, errOut, "captured log kept")
 }
 
+// TestRunTTYCaptureWarningOwnsItsLine forces the capture warning (pending/
+// is a regular file, so the capture file cannot be created) on a TTY run
+// with live rendering: the warning must own a whole terminal line from
+// column 0 -- never glued onto a status paint or a child line -- and the
+// status discipline must hold around it.
+func TestRunTTYCaptureWarningOwnsItsLine(t *testing.T) {
+	db := seedDemoModel(t)
+	require.NoError(t, os.WriteFile(filepath.Join(db, "pending"), []byte("blocker"), 0o644))
+	shortTicks(t)
+	captureExit(t)
+	forceTTY(t, true)
+
+	out, errOut, err := execLpi(t, nil, "run", "--db", db, "--key", "demo", "--learn", "--",
+		"/bin/sh", "-c", glueScript)
+	require.NoError(t, err)
+	assert.Equal(t, glueScriptStdout(), out, "stdout passthrough must stay byte-faithful")
+
+	lines := renderScrollback(errOut)
+	assertStatusOwnsLines(t, lines)
+	warns := 0
+	for _, ln := range lines {
+		if !strings.Contains(ln, "capture file disabled") {
+			continue
+		}
+		warns++
+		assert.True(t, strings.HasPrefix(ln, "warning: capture file disabled: "),
+			"nothing may precede the warning on its line, got %q", ln)
+		assert.True(t, strings.HasSuffix(ln, "not a directory"),
+			"nothing may follow the warning on its line, got %q", ln)
+	}
+	assert.Equal(t, 1, warns, "the capture warning must render exactly once, as a whole line")
+}
+
 // TestCaptureFileAsRef proves capture files work anywhere a reference log
 // does: --ref resolution goes through model.DigestFile, which sniffs the
 // capture header.

@@ -163,9 +163,11 @@ when learning): the same Ctrl-C that interrupts lpi also kills the upstream
 command, whose death EOFs stdin -- and pipe's unconditional EOF-learn would
 merge a truncated stream into the model. The handler wins instead: it
 serializes with the render/estimator mutex, prints
-`interrupted -- run not learned` plus the recovery lines, and exits 128+N
-immediately (the capture file is already durable on disk). A signal that
-arrives after the stream completed is ignored.
+`interrupted -- run not learned` plus the recovery lines (through the
+renderer's `Message`, so they land on their own terminal lines instead of
+gluing onto a painted status), and exits 128+N immediately (the capture
+file is already durable on disk). A signal that arrives after the stream
+completed is ignored.
 
 ### Atomic save
 
@@ -392,6 +394,8 @@ An undelivered trailing partial line is dropped at shutdown.
     func New(w io.Writer) *Renderer
     func (r *Renderer) Update(s progress.Snapshot)
     func (r *Renderer) Close(final progress.Snapshot)
+    func (r *Renderer) Message(msg string)
+    func (r *Renderer) Break()
     func (r *Renderer) Passthrough(dst io.Writer, mu *sync.Mutex) io.Writer
     func Bar(frac float64, width int) string
     func StatusLine(s progress.Snapshot) string
@@ -425,6 +429,22 @@ through the returned writer lock mu, the same mutex the caller serializes
 Update/Close with; a destination that cannot collide with the status stream
 (neither the renderer's own writer nor a TTY alongside a TTY status) is
 returned unwrapped and stays lock-free.
+
+`Message` gives lpi's OWN out-of-band lines -- capture warnings, pipe's
+interrupt notice, the printed recovery command -- the same discipline while
+a renderer is live: a painted TTY status is erased, a partial child line is
+terminated, the message is printed with a trailing newline, and the next
+Update (or completed passthrough line) repaints the status. It follows the
+Update/Close convention: the caller serializes it under the same mutex
+(cmd/lpi routes these prints through the `notify` func type in refs.go --
+`renderNotify` when a renderer is active, `plainNotify` otherwise, e.g. a
+json-stream pipe). `Break` is for paths that abandon rendering without a
+final status (a mid-stream read error, a tailer failure): it newline-
+terminates a painted status or partial child line so whatever follows --
+recovery lines, the CLI's error report -- starts on a fresh line. watch's
+`--json-stream` snapshots ride `Passthrough` for the same reason: when
+stdout shares a terminal with the stderr status, each NDJSON line gets the
+erase/repaint treatment (a piped stdout is returned unwrapped).
 
 ### cmd/lpi
 
