@@ -151,7 +151,7 @@ from exit code 0.`,
 			capture.Discard()
 			return fmt.Errorf("run not learned: %w", err)
 		}
-		if err := learnRun(errW, pipeOpts.rf.db, pipeOpts.learnKey, run); err != nil {
+		if err := learnRun(errW, pipeOpts.rf.db, pipeOpts.learnKey, run, ""); err != nil {
 			keepCapture(errW, capture, pipeOpts.rf.db, pipeOpts.learnKey)
 			return err
 		}

@@ -131,14 +131,16 @@ func loadOrCreate(db, key string) (*model.Model, error) {
 	return m, err
 }
 
-// learnRun adds run to key's stored model, saves it, and prints the
-// confirmation line used by pipe and run.
-func learnRun(w io.Writer, db, key string, run *model.Run) error {
+// learnRun adds run to key's stored model, records invocation as the
+// model's most recent command-line label (empty is a no-op), saves it, and
+// prints the confirmation line used by pipe, run, and auto.
+func learnRun(w io.Writer, db, key string, run *model.Run, invocation string) error {
 	m, err := loadOrCreate(db, key)
 	if err != nil {
 		return err
 	}
 	m.AddRun(run)
+	m.AddInvocation(invocation)
 	path := model.PathForKey(db, key)
 	if err := m.Save(path); err != nil {
 		return err

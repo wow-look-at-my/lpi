@@ -36,11 +36,13 @@ func TestLearnThenModelLifecycle(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, `model "demo": 1 runs,`)
 
-	// list shows the key.
+	// list shows the key; a model with no recorded invocation shows "-" in
+	// the LABEL column.
 	out, _, err = execLpi(t, nil, "model", "list", "--db", db)
 	require.NoError(t, err)
 	assert.Contains(t, out, "KEY")
-	assert.Contains(t, out, "demo")
+	assert.Contains(t, out, "LABEL")
+	assert.Contains(t, out, "demo  -  ")
 	assert.Contains(t, out, "1")
 
 	// show prints per-run rows and merged totals.
