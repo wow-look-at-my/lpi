@@ -43,7 +43,8 @@ func resetCommand(c *cobra.Command) {
 }
 
 // execLpi runs the root command in-process and returns stdout, stderr, and
-// the execution error.
+// the execution error. Args pass through routeArgs, so tests exercise the
+// production magic-mode routing.
 func execLpi(t *testing.T, stdin io.Reader, args ...string) (string, string, error) {
 	t.Helper()
 	resetCommand(rootCmd)
@@ -54,7 +55,7 @@ func execLpi(t *testing.T, stdin io.Reader, args ...string) (string, string, err
 	rootCmd.SetIn(stdin)
 	rootCmd.SetOut(&out)
 	rootCmd.SetErr(&errOut)
-	rootCmd.SetArgs(args)
+	rootCmd.SetArgs(routeArgs(args))
 	err := rootCmd.Execute()
 	return out.String(), errOut.String(), err
 }

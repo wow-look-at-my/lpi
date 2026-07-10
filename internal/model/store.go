@@ -12,11 +12,14 @@ import (
 const currentVersion = 1
 
 // envelope is the persisted form of a model; derived fields are rebuilt on
-// load.
+// load. Invocations was added within version 1: gob tolerates the field
+// being absent (old file, new reader) and unknown (new file, old reader)
+// alike, so no version bump is needed.
 type envelope struct {
-	Version int
-	Key     string
-	Runs    []*Run
+	Version     int
+	Key         string
+	Runs        []*Run
+	Invocations []string
 }
 
 // Save writes the model as a gzip-compressed gob envelope, creating parent
@@ -51,7 +54,8 @@ func (m *Model) Save(path string) error {
 // writeEnvelope encodes the model onto f as gzipped gob.
 func writeEnvelope(f *os.File, m *Model) error {
 	gz := gzip.NewWriter(f)
-	if err := gob.NewEncoder(gz).Encode(envelope{Version: currentVersion, Key: m.Key, Runs: m.Runs}); err != nil {
+	env := envelope{Version: currentVersion, Key: m.Key, Runs: m.Runs, Invocations: m.Invocations}
+	if err := gob.NewEncoder(gz).Encode(env); err != nil {
 		return err
 	}
 	return gz.Close()
@@ -77,7 +81,7 @@ func Load(path string) (*Model, error) {
 	if env.Version != currentVersion {
 		return nil, fmt.Errorf("model: unsupported version %d (want %d)", env.Version, currentVersion)
 	}
-	m := &Model{Key: env.Key, Runs: env.Runs}
+	m := &Model{Key: env.Key, Runs: env.Runs, Invocations: env.Invocations}
 	m.Rebuild()
 	return m, nil
 }

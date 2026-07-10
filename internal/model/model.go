@@ -1,6 +1,9 @@
 package model
 
 import (
+	"encoding/binary"
+	"fmt"
+	"hash/fnv"
 	"slices"
 	"time"
 )
@@ -9,10 +12,19 @@ import (
 // are evicted FIFO.
 const MaxRuns = 8
 
+// MaxInvocations is the maximum number of command-line labels kept per
+// model; older labels are dropped from the back.
+const MaxInvocations = 5
+
 // Model is the merged expectation built from up to MaxRuns reference runs.
 type Model struct {
 	Key  string
 	Runs []*Run
+
+	// Invocations are the command lines recorded as having produced this
+	// pattern, most recent first. They are display labels only -- pattern
+	// identity is the run content, never the command line.
+	Invocations []string
 
 	// Derived by Rebuild:
 
@@ -40,6 +52,57 @@ func (m *Model) AddRun(r *Run) {
 		m.Runs = slices.Delete(m.Runs, 0, len(m.Runs)-MaxRuns)
 	}
 	m.Rebuild()
+}
+
+// AddInvocation records cmd as the most recent command line that produced
+// this pattern. An empty cmd is a no-op; a duplicate moves to the front;
+// the list is capped at MaxInvocations.
+func (m *Model) AddInvocation(cmd string) {
+	if cmd == "" {
+		return
+	}
+	if i := slices.Index(m.Invocations, cmd); i >= 0 {
+		m.Invocations = slices.Delete(m.Invocations, i, i+1)
+	}
+	m.Invocations = slices.Insert(m.Invocations, 0, cmd)
+	if len(m.Invocations) > MaxInvocations {
+		m.Invocations = m.Invocations[:MaxInvocations]
+	}
+}
+
+// DisplayLabel is the model's human-facing name: the most recent recorded
+// invocation when one exists, else the key.
+func (m *Model) DisplayLabel() string {
+	if len(m.Invocations) > 0 {
+		return m.Invocations[0]
+	}
+	return m.Key
+}
+
+// AutoKey derives the storage id for an auto-recorded pattern from the
+// run's content: "auto." plus 16 lowercase hex chars of an FNV-1a 64 hash
+// over the run's fingerprint multiset (each fingerprint and its occurrence
+// count, in ascending fingerprint order, 8 bytes big-endian each). The id
+// is only a storage handle -- pattern identity is the content itself,
+// re-established by the fit chooser on every run -- but a content-derived
+// id makes re-recording identical output land on the same file. "auto." is
+// the reserved namespace for auto-recorded patterns; '.' is in the key
+// charset, so the id passes through sanitizeKey unchanged.
+func AutoKey(r *Run) string {
+	fps := make([]uint64, 0, len(r.Occ))
+	for fp := range r.Occ {
+		fps = append(fps, fp)
+	}
+	slices.Sort(fps)
+	h := fnv.New64a()
+	var buf [8]byte
+	for _, fp := range fps {
+		binary.BigEndian.PutUint64(buf[:], fp)
+		h.Write(buf[:])
+		binary.BigEndian.PutUint64(buf[:], uint64(len(r.Occ[fp])))
+		h.Write(buf[:])
+	}
+	return fmt.Sprintf("auto.%016x", h.Sum64())
 }
 
 // Rebuild recomputes the derived fields from Runs.

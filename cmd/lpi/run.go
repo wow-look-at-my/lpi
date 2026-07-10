@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -103,7 +104,7 @@ yet) and the next invocation gets a real estimate. With a --ref, a missing
 		lv.r.Close(final)
 		fmt.Fprint(errW, render.Summary(final))
 		if lv.dig != nil {
-			if err := lv.finishLearn(errW, exitCode); err != nil {
+			if err := lv.finishLearn(errW, exitCode, args); err != nil {
 				return err
 			}
 		}
@@ -119,8 +120,9 @@ yet) and the next invocation gets a real estimate. With a --ref, a missing
 // into the model and the capture file removed; on a failed run the digest
 // is dropped -- a truncated log would corrupt the time-gap weights -- but
 // the capture file is kept and the recovery command printed, so the data
-// is never lost.
-func (lv *liveRun) finishLearn(errW io.Writer, exitCode int) error {
+// is never lost. args is the wrapped command line, recorded on the model
+// as its invocation label.
+func (lv *liveRun) finishLearn(errW io.Writer, exitCode int, args []string) error {
 	db, key := runOpts.rf.db, runOpts.rf.key
 	if exitCode != 0 && !runOpts.learnOnFailure {
 		fmt.Fprintf(errW, "exit status %d -- run not learned\n", exitCode)
@@ -133,12 +135,21 @@ func (lv *liveRun) finishLearn(errW io.Writer, exitCode int) error {
 		lv.capture.Discard()
 		return fmt.Errorf("run not learned: %w", err)
 	}
-	if err := learnRun(errW, db, key, run); err != nil {
+	if err := learnRun(errW, db, key, run, strings.Join(args, " ")); err != nil {
 		keepCapture(errW, lv.capture, db, key)
 		return err
 	}
 	lv.capture.Discard()
 	return nil
+}
+
+// feeder is the estimator-shaped dependency of liveRun: a plain
+// progress.Estimator for the explicit-key modes, or a progress.Chooser for
+// auto mode.
+type feeder interface {
+	Observe(string, time.Time)
+	Tick(time.Time)
+	Snapshot() progress.Snapshot
 }
 
 // liveRun is the shared live state of one run invocation. The mutex
@@ -147,7 +158,7 @@ func (lv *liveRun) finishLearn(errW io.Writer, exitCode int) error {
 // passthrough writes share it via lockedWriter.
 type liveRun struct {
 	mu      sync.Mutex
-	est     *progress.Estimator
+	est     feeder
 	dig     *model.Digester
 	capture *model.CaptureWriter
 	r       *render.Renderer

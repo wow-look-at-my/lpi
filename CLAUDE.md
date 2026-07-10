@@ -26,16 +26,20 @@ so commit first. CI (`.github/workflows/ci.yml`) runs the same via
 cmd/lpi/               cobra CLI: one command per file, self-registering via
                        init(); refs.go holds the shared --ref/--key/--db
                        resolution, the pinned JSON snapshot type, and the
-                       line feeder
+                       line feeder; route.go routes bare "lpi CMD" to the
+                       auto command (auto.go), the magic default mode
 internal/
   fingerprint/  line normalization (hand-rolled, no regexp) + FNV-1a hashing
   linescan/     long-line-safe line splitting (1 MiB cap, \r strip)
   timeparse/    timestamp format detection and stateful parsing
   model/        run digestion (time-gap weights), run merging, persistence
-                (atomic save), capture.go: durable capture files for
+                (atomic save), invocation labels + AutoKey content ids,
+                capture.go: durable capture files for
                 learning runs (written under <db>/pending/, sniffed by
                 DigestFile via the "#lpi-capture v1" header)
-  progress/     the live estimator: occurrence matching -> Snapshot
+  progress/     the live estimator: occurrence matching -> Snapshot;
+                autofit.go: the Chooser that fits live output against every
+                stored model (auto mode's lock/switch/merge decisions)
   tailer/       polling file follower (truncation, rotation, appears-late)
   render/       Bar/StatusLine/Summary strings + TTY-aware Renderer
 testdata/demo/         two complete fake cmake builds + a ~55% partial run,
@@ -91,6 +95,23 @@ testdata/demo/         two complete fake cmake builds + a ~55% partial run,
   empty model: progress 0, confidence "none", "recording baseline" status
   line, and a short baseline summary. pipe's `--learn-key` doubles as the
   reference key when `--key`/`--ref` are absent.
+- Magic default mode: `Execute` routes os.Args through `routeArgs` -- a
+  first arg that is no flag, no `--`, and no registered subcommand/alias
+  (nor help/completion/__complete*) becomes `auto -- <args>`; `lpi -- CMD`
+  is the escape for shadowed names. `auto` (only flag: --db) feeds every
+  stored model to progress.Chooser, which locks by cumulative match rate
+  (lockMinLines=12, earlyLockRate=0.8, lockWindowLines=32, lockRate=0.5,
+  switchMargin=0.15 hysteresis) and is always learning: exit 0 merges into
+  the locked pattern at final rate >= mergeRate=0.6 (adding the command
+  line to Model.Invocations, shown by `model list`'s LABEL column), else
+  records a new pattern under model.AutoKey(run) -- `auto.<hash16>`, the
+  reserved auto namespace, hashed from the fingerprint multiset (an
+  existing file under that id means same content, so it merges). A clean
+  run with <2 nonempty lines learns nothing and is NOT an error: capture
+  discarded, one "nothing to learn" notice line, exit code stays the
+  child's 0. Failure semantics are unchanged from run --learn: never
+  merged, capture kept (recovery key = fitted pattern when solid, else
+  the content id), <2 nonempty lines discards, exit code propagates.
 
 ## Testing seams (package vars)
 
@@ -101,7 +122,10 @@ testdata/demo/         two complete fake cmake builds + a ~55% partial run,
   `newSignalContext` (watch cancellation)
 - cmd tests execute `rootCmd` in-process; `resetCommand` in helpers_test.go
   restores flag defaults AND re-inits pflag's sticky `--` position between
-  executions (pflag never resets `argsLenAtDash` on Parse)
+  executions (pflag never resets `argsLenAtDash` on Parse). `execLpi`
+  passes its args through `routeArgs`, so cmd tests exercise the
+  production magic-mode routing; tests that call `Execute`/`main` directly
+  must pin os.Args first (routing reads the real process arguments)
 
 ## Conventions
 
