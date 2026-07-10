@@ -135,9 +135,11 @@ func keepAutoCapture(errW io.Writer, ch *progress.Chooser, dig *model.Digester, 
 // clean exit merges the run into the fitted pattern when the fit cleared
 // the merge bar, else records a new pattern under its content-derived id
 // (an existing model under that id means this exact output shape was
-// recorded before -- same pattern -- so the run merges into it). A failed
-// run is never merged: the capture file is kept and the recovery command
-// printed, exactly like run --learn.
+// recorded before -- same pattern -- so the run merges into it). A clean
+// run too short to digest (<2 nonempty lines) has nothing to learn: a
+// one-line notice, not an error, so the child's exit code 0 survives. A
+// failed run is never merged: the capture file is kept and the recovery
+// command printed, exactly like run --learn.
 func finishAutoLearn(errW io.Writer, db string, args []string, exitCode int, ch *progress.Chooser, dig *model.Digester, capture *model.CaptureWriter) error {
 	if exitCode != 0 {
 		fmt.Fprintf(errW, "exit status %d -- run not learned\n", exitCode)
@@ -146,9 +148,13 @@ func finishAutoLearn(errW io.Writer, db string, args []string, exitCode int, ch 
 	}
 	run, err := dig.Finish()
 	if err != nil {
-		// The only Finish failure is <2 nonempty lines: nothing recoverable.
+		// The only Finish failure is <2 nonempty lines: nothing recoverable,
+		// and on a clean exit nothing to learn is not an error -- wrapping a
+		// quick command must never turn its success into a failure. Print a
+		// notice and preserve the child's exit code (0).
 		capture.Discard()
-		return fmt.Errorf("run not learned: %w", err)
+		fmt.Fprintln(errW, "nothing to learn -- fewer than 2 nonempty output lines")
+		return nil
 	}
 	invocation := strings.Join(args, " ")
 	if key, _, ok := ch.MergeTarget(); ok {

@@ -106,10 +106,12 @@ testdata/demo/         two complete fake cmake builds + a ~55% partial run,
   line to Model.Invocations, shown by `model list`'s LABEL column), else
   records a new pattern under model.AutoKey(run) -- `auto.<hash16>`, the
   reserved auto namespace, hashed from the fingerprint multiset (an
-  existing file under that id means same content, so it merges). Failure
-  semantics are unchanged from run --learn: never merged, capture kept
-  (recovery key = fitted pattern when solid, else the content id), <2
-  nonempty lines discards, exit code propagates.
+  existing file under that id means same content, so it merges). A clean
+  run with <2 nonempty lines learns nothing and is NOT an error: capture
+  discarded, one "nothing to learn" notice line, exit code stays the
+  child's 0. Failure semantics are unchanged from run --learn: never
+  merged, capture kept (recovery key = fitted pattern when solid, else
+  the content id), <2 nonempty lines discards, exit code propagates.
 
 ## Testing seams (package vars)
 

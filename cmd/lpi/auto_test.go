@@ -196,15 +196,34 @@ func TestAutoLocksAndMergesUserKey(t *testing.T) {
 	assert.Empty(t, autoModelKeys(t, db), "no auto pattern may be recorded on a merge")
 }
 
-func TestAutoTooShortNotLearned(t *testing.T) {
-	db := t.TempDir()
-	shortTicks(t)
-	captureExit(t)
+func TestAutoCleanShortRunIsNotAnError(t *testing.T) {
+	// A clean child exit with <2 nonempty lines has nothing to learn, but
+	// wrapping a quick command must never turn its success into a failure:
+	// a one-line notice, no error, no usage dump, exit code stays 0.
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{"no output", []string{"true"}},
+		{"one line", []string{"/bin/sh", "-c", "echo hi"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := t.TempDir()
+			shortTicks(t)
+			code := captureExit(t)
 
-	_, _, err := execLpi(t, nil, "auto", "--db", db, "--", "/bin/sh", "-c", "echo lonely")
-	require.ErrorContains(t, err, "run not learned")
-	assert.Empty(t, pendingFiles(t, db), "fewer than 2 nonempty lines is nothing worth recovering")
-	assert.Empty(t, autoModelKeys(t, db))
+			args := append([]string{"auto", "--db", db, "--"}, tt.args...)
+			_, errOut, err := execLpi(t, nil, args...)
+			require.NoError(t, err)
+			assert.Equal(t, -1, *code, "a clean short run must not call osExit")
+			assert.Contains(t, errOut, "nothing to learn -- fewer than 2 nonempty output lines")
+			assert.NotContains(t, errOut, "Usage:")
+			assert.NotContains(t, errOut, "Error:")
+			assert.Empty(t, autoModelKeys(t, db), "nothing to learn records no pattern")
+			assert.Empty(t, pendingFiles(t, db), "fewer than 2 nonempty lines is nothing worth recovering")
+		})
+	}
 }
 
 func TestAutoSkipsCorruptModels(t *testing.T) {

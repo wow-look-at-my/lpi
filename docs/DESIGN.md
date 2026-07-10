@@ -206,14 +206,19 @@ prefix `auto`). On exit 0:
   existing file means this exact output shape was recorded before --
   same pattern (this also catches sub-`lockMinLines` runs, which can
   never lock).
+- fewer than 2 nonempty output lines -> nothing to learn: no pattern is
+  recorded, the capture is removed, a one-line notice
+  (`nothing to learn -- fewer than 2 nonempty output lines`) is printed,
+  and the child's exit code (0) is preserved. Wrapping a quick command
+  must never turn its success into an lpi failure.
 
 On a non-zero exit the run is never merged (same reasoning as
 `run --learn`: a truncated log corrupts time-gap weights). The capture
 file is kept and the recovery command printed; its key is the fitted
 pattern when the fit cleared `mergeRate`, else the content id -- in both
-cases where a recovery would sensibly land. Fewer than 2 nonempty lines
-follows the usual rule: nothing recoverable, capture removed. The child's
-exit code propagates unchanged.
+cases where a recovery would sensibly land. A failed run with fewer than
+2 nonempty lines follows the usual rule: nothing recoverable, capture
+removed. The child's exit code propagates unchanged.
 
 ### CLI routing
 
