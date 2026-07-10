@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -142,4 +143,59 @@ func TestModelRebuildEmpty(t *testing.T) {
 	assert.Zero(t, m.TotalUnits)
 	assert.Zero(t, m.RefDuration)
 	assert.False(t, m.HasTimes)
+}
+
+func TestAddInvocation(t *testing.T) {
+	m := New("k")
+
+	m.AddInvocation("")
+	assert.Empty(t, m.Invocations, "empty invocations are ignored")
+
+	m.AddInvocation("make -j8")
+	m.AddInvocation("make")
+	assert.Equal(t, []string{"make", "make -j8"}, m.Invocations, "most recent first")
+
+	m.AddInvocation("make -j8")
+	assert.Equal(t, []string{"make -j8", "make"}, m.Invocations,
+		"a duplicate moves to the front instead of repeating")
+
+	for _, cmd := range []string{"a", "b", "c", "d", "e", "f"} {
+		m.AddInvocation(cmd)
+	}
+	assert.Equal(t, []string{"f", "e", "d", "c", "b"}, m.Invocations,
+		"the list is capped at MaxInvocations, oldest dropped")
+	assert.Len(t, m.Invocations, MaxInvocations)
+}
+
+func TestDisplayLabel(t *testing.T) {
+	m := New("mykey")
+	assert.Equal(t, "mykey", m.DisplayLabel(), "no invocations falls back to the key")
+	m.AddInvocation("cmake --build build")
+	m.AddInvocation("make -j8")
+	assert.Equal(t, "make -j8", m.DisplayLabel(), "the most recent invocation wins")
+}
+
+func TestAutoKey(t *testing.T) {
+	lines := []string{"alpha", "beta", "beta", "gamma"}
+	r1 := digestPlain(t, "r1", lines)
+	r2 := digestPlain(t, "r2", lines)
+
+	key := AutoKey(r1)
+	assert.Regexp(t, `^auto\.[0-9a-f]{16}$`, key)
+	assert.Equal(t, key, AutoKey(r2),
+		"the id depends only on the fingerprint multiset, not on source or times")
+
+	timed := digestAt(t, "r3", lines,
+		[]time.Duration{0, time.Second, 2 * time.Second, 9 * time.Second})
+	assert.Equal(t, key, AutoKey(timed), "timing does not participate in identity")
+
+	assert.NotEqual(t, key, AutoKey(digestPlain(t, "r4", []string{"alpha", "beta", "gamma"})),
+		"a different occurrence count is a different pattern")
+	assert.NotEqual(t, key, AutoKey(digestPlain(t, "r5", []string{"alpha", "beta", "beta", "delta"})),
+		"a different fingerprint is a different pattern")
+
+	// The auto. namespace must survive the key-to-file mapping unchanged:
+	// '.' is in sanitizeKey's allowed charset.
+	assert.Equal(t, key, sanitizeKey(key))
+	assert.Equal(t, filepath.Join("/db", key+".lpi"), PathForKey("/db", key))
 }
