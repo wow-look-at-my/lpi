@@ -14,24 +14,29 @@ that one slow test) are honestly represented instead of glossed over.
 ## Quickstart
 
 ```sh
-# First run: no model for "mybuild" yet, so lpi records it as the baseline.
-lpi run --key mybuild --learn -- make -j8
+# First run: lpi has never seen this output, so it records it as a pattern.
+lpi make -j8
 
 # Every run after that: live bar, %, ETA -- and keeps learning.
-lpi run --key mybuild --learn -- make -j8
+lpi make -j8
 ```
 
-While the build runs, stderr shows a live status line:
+That is the whole interface: no key to invent, no flag to remember. The
+first run ends with `recorded new pattern "make -j8"`; every later run
+shows a live status line on stderr:
 
 ```
-[==========>           ] 46.3%  units 65/108 (60.2%)  elapsed 3m05s  eta ~3m35s  pace 1.27x  match 98%
+[==========>           ] 46.3%  units 65/108 (60.2%)  elapsed 3m05s  eta ~3m35s  pace 1.27x  match 98%  ref make -j8
 ```
 
-(The bootstrap run, having nothing to compare against, shows
-`recording baseline  lines 65  elapsed 3m05s` instead.)
+lpi identifies the run by its OUTPUT, not by the command line -- `make`,
+`make -j8`, and `nice make` all land on the same pattern as long as they
+produce the same build, and the same `make` in two different projects is
+two different patterns. Failed runs are never merged into a pattern (the
+captured log is kept and the recovery command printed).
 
-Already have the log of a past completed run? Seed the model from it and
-get real progress on the very first wrapped run:
+Power users can manage named models explicitly -- seed a key from an old
+log and get real progress on the very first wrapped run:
 
 ```sh
 lpi learn --key mybuild old-build.log
@@ -40,12 +45,36 @@ lpi run --key mybuild --learn -- make -j8
 
 ## Modes
 
-### `lpi run` -- wrap a command (recommended)
+### `lpi auto` -- automatic pattern detection (the default)
+
+```sh
+lpi make -j8            # plain "lpi CMD [ARGS...]" routes to auto
+lpi -- run ./job.sh     # explicit form for commands shadowed by a subcommand
+lpi auto --db /tmp/db -- make -j8
+```
+
+Runs the command exactly like `lpi run` (passthrough, Ctrl-C forwarding,
+exit-code propagation), but picks the reference itself: every stored model
+is matched against the live output, the status line shows
+`identifying pattern` until one fits, then the normal bar tagged
+`ref <label>`. On a clean exit the run is merged into the recognized
+pattern -- or recorded as a new one (`recorded new pattern "make -j8"`)
+when nothing fits, so the next run with the same output shape gets live
+progress. Auto-recorded patterns get content-derived keys (`auto.<hash>`);
+`lpi model list` shows the command lines they were seen from in the LABEL
+column. A wrapped command whose name collides with an lpi subcommand
+(`run`, `model`, ...) needs the `lpi -- CMD` form.
+
+### `lpi run` -- wrap a command under an explicit key
 
 ```sh
 lpi run --key mybuild --learn -- make -j8
 lpi run --ref last-night.log -- cmake --build build -j
 ```
+
+This is the explicit-key form of the default mode: you name the reference
+(`--key`/`--ref`) and opt into learning, instead of letting the output
+pick its own pattern.
 
 Spawns the command, passes its stdout/stderr through byte-faithfully, renders
 progress on stderr, forwards Ctrl-C, and propagates the exit code (a child
@@ -232,6 +261,8 @@ overflow lines (seen more often than expected) are counted separately.
 | `match_rate` | float 0..1 | fraction of live lines matched |
 | `confidence` | string | `high`, `medium`, `low`, or `none` |
 | `current_lines` / `matched_lines` / `novel_lines` / `overflow_lines` | int | line accounting |
+| `identifying` | bool | auto mode is still picking a pattern; **absent when false** |
+| `pattern` | string | display label of the locked pattern; **absent when empty** |
 
 ## Caveats
 
