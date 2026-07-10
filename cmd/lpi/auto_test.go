@@ -9,8 +9,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/wow-look-at-my/log-progress-indicator/internal/model"
 )
 
 // autoLines returns n distinct all-letter log lines (digits would collapse
