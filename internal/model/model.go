@@ -98,14 +98,16 @@ func (m *Model) Rebuild() {
 	if n == 0 {
 		return
 	}
-	fps := make(map[uint64]struct{})
+	var fps []uint64
 	for _, r := range m.Runs {
 		for fp := range r.Occ {
-			fps[fp] = struct{}{}
+			fps = append(fps, fp)
 		}
 	}
+	slices.Sort(fps)
+	fps = slices.Compact(fps)
 	counts := make([]int, n)
-	for fp := range fps {
+	for _, fp := range fps {
 		for i, r := range m.Runs {
 			counts[i] = len(r.Occ[fp])
 		}
