@@ -18,7 +18,7 @@ go-toolchain --no-benchmark  # faster inner loop
 Accept whatever it auto-rewrites (formatting, imports, go.mod) and commit
 those changes; note it refuses to auto-fix files with uncommitted changes,
 so commit first. CI (`.github/workflows/ci.yml`) runs the same via
-`wow-look-at-my/go-toolchain@v1`. Tests use `github.com/stretchr/testify`.
+`wow-look-at-my/go-toolchain@master`. Tests use `github.com/stretchr/testify`.
 
 ## Layout
 
