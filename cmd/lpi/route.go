@@ -6,12 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// routeArgs implements the magic default mode: a first argument that is
-// neither a flag nor a registered subcommand is treated as a command to run
-// under 'auto', with '--' inserted so the wrapped command's own flags
-// (lpi make are never parsed as lpi flags. "lpi -- CMD" is the
-// explicit escape for wrapped commands whose name collides with an lpi
-// subcommand.
+// routeArgs implements the magic default mode: a
 func routeArgs(args []string) []string {
 	switch {
 	case len(args) == 0:
@@ -19,20 +14,17 @@ func routeArgs(args []string) []string {
 	case args[0] == "--":
 		return append([]string{"auto", "--"}, args[1:]...)
 	case strings.HasPrefix(args[0], "-"):
-		// Root flags like --help and --version.
+		// Root flags like --help and --version
 		return args
 	case isSubcommandName(args[0]):
-		// Subcommands always win over the magic path.
+		// Subcommands always win over the magic path
 		return args
 	default:
 		return append([]string{"auto", "--"}, args...)
 	}
 }
 
-// isSubcommandName reports whether name is a registered subcommand or alias
-// on the root command, or of cobra's implicit commands (help,
-// completion, and the hidden shell-completion entry points), which are not
-// registered until Execute runs.
+// isSubcommandName reports whether name is a
 func isSubcommandName(name string) bool {
 	switch name {
 	case "help", "completion", cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd:

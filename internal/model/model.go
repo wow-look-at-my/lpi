@@ -8,44 +8,38 @@ import (
 	"time"
 )
 
-// MaxRuns is the maximum number of reference runs kept per model; older runs
-// are evicted FIFO.
+// MaxRuns is the maximum number of reference runs
 const MaxRuns = 8
 
-// MaxInvocations is the maximum number of command-line labels kept per
-// model; older labels are dropped from the back.
+// MaxInvocations is the maximum number of
 const MaxInvocations = 5
 
-// Model is the merged expectation built from up to MaxRuns reference runs.
+// Model is the merged expectation built from up to
 type Model struct {
 	Key  string
 	Runs []*Run
 
-	// Invocations are the command lines recorded as having produced this
-	// pattern, most recent first. They are display labels only -- pattern
-	// identity is the run content, never the command line.
+	// Invocations are the command lines recorded as
 	Invocations []string
 
-	// Derived by Rebuild:
+	// Derived by Rebuild
 
-	// Expect maps each fingerprint to its expected occurrences.
+	// Expect maps each fingerprint to its expected
 	Expect map[uint64][]Occurrence
-	// TotalUnits is the total expected line count (sum of expected
-	// occurrence counts).
+	// TotalUnits is the total expected line count (sum
 	TotalUnits int
-	// RefDuration is the upper-median duration of the timed runs when
-	// no run has times).
+	// RefDuration is the upper-median duration of the
 	RefDuration time.Duration
-	// HasTimes reports whether any run has usable times.
+	// HasTimes reports whether any run has usable times
 	HasTimes bool
 }
 
-// New returns an empty model for key.
+// New returns an empty model for key
 func New(key string) *Model {
 	return &Model{Key: key, Expect: make(map[uint64][]Occurrence)}
 }
 
-// AddRun appends a run, evicts the oldest beyond MaxRuns, and rebuilds.
+// AddRun appends a run, evicts the oldest beyond
 func (m *Model) AddRun(r *Run) {
 	m.Runs = append(m.Runs, r)
 	if len(m.Runs) > MaxRuns {
@@ -54,9 +48,7 @@ func (m *Model) AddRun(r *Run) {
 	m.Rebuild()
 }
 
-// AddInvocation records cmd as the most recent command line that produced
-// this pattern. An empty cmd is a no-op; a duplicate moves to the front;
-// the list is capped at MaxInvocations.
+// AddInvocation records cmd as the most recent
 func (m *Model) AddInvocation(cmd string) {
 	if cmd == "" {
 		return
@@ -70,8 +62,7 @@ func (m *Model) AddInvocation(cmd string) {
 	}
 }
 
-// DisplayLabel is the model's human-facing name: the most recent recorded
-// invocation when exists, else the key.
+// DisplayLabel is the model's human-facing name
 func (m *Model) DisplayLabel() string {
 	if len(m.Invocations) > 0 {
 		return m.Invocations[0]
@@ -79,15 +70,7 @@ func (m *Model) DisplayLabel() string {
 	return m.Key
 }
 
-// AutoKey derives the storage id for an auto-recorded pattern from the
-// run's content: "auto." plus lowercase hex chars of an hash
-// over the run's fingerprint multiset (each fingerprint and its occurrence
-// count, in ascending fingerprint order, bytes big-endian each). The id
-// is only a storage handle -- pattern identity is the content itself,
-// re-established by the fit chooser on every run -- but a content-derived
-// id makes re-recording identical output land on the same file. "auto." is
-// the reserved namespace for auto-recorded patterns; '.' is in the key
-// charset, so the id passes through sanitizeKey unchanged.
+// AutoKey derives the storage id for an
 func AutoKey(r *Run) string {
 	fps := make([]uint64, 0, len(r.Occ))
 	for fp := range r.Occ {
@@ -105,7 +88,7 @@ func AutoKey(r *Run) string {
 	return fmt.Sprintf("auto.%016x", h.Sum64())
 }
 
-// Rebuild recomputes the derived fields from Runs.
+// Rebuild recomputes the derived fields from Runs
 func (m *Model) Rebuild() {
 	m.Expect = make(map[uint64][]Occurrence)
 	m.TotalUnits = 0
@@ -127,8 +110,7 @@ func (m *Model) Rebuild() {
 			counts[i] = len(r.Occ[fp])
 		}
 		slices.Sort(counts)
-		// Upper median: with runs this is the max, so incremental or
-		// truncated run cannot drop expected lines.
+		// Upper median: with runs this is the max, so
 		expect := counts[n/2]
 		if expect == 0 {
 			continue
@@ -140,8 +122,7 @@ func (m *Model) Rebuild() {
 	m.deriveDuration()
 }
 
-// mergeOccurrences averages occurrence k's fractions over the runs that have
-// that occurrence.
+// mergeOccurrences averages occurrence k's
 func (m *Model) mergeOccurrences(fp uint64, expect int) []Occurrence {
 	occs := make([]Occurrence, expect)
 	for k := 0; k < expect; k++ {
@@ -164,7 +145,7 @@ func (m *Model) mergeOccurrences(fp uint64, expect int) []Occurrence {
 	return occs
 }
 
-// renormalizeWeights scales all WeightFrac so their grand total is
+// renormalizeWeights scales all WeightFrac so their
 func (m *Model) renormalizeWeights() {
 	var total float64
 	for _, occs := range m.Expect {
@@ -182,8 +163,7 @@ func (m *Model) renormalizeWeights() {
 	}
 }
 
-// deriveDuration sets RefDuration to the upper-median duration among timed
-// runs and HasTimes when any run has times.
+// deriveDuration sets RefDuration to the
 func (m *Model) deriveDuration() {
 	var durs []time.Duration
 	for _, r := range m.Runs {

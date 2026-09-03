@@ -13,8 +13,7 @@ import (
 
 const testInterval = 5 * time.Millisecond
 
-// start runs a Tailer on its own goroutine and returns its output channel,
-// a cancel func, and the channel Run's error will arrive on.
+// start runs a Tailer on its own goroutine and
 func start(t *testing.T, tl *Tailer) (chan string, context.CancelFunc, chan error) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -135,8 +134,7 @@ func TestFileAppearsLate(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "late.log")
 	lines, _, _ := start(t, &Tailer{Path: path, FromStart: false, Interval: testInterval})
 	time.Sleep(5 * testInterval)
-	// The file did not exist at start, so all of its content is new even
-	// with FromStart=false.
+	// The file did not exist at start, so all of its
 	append_(t, path, "hello\nworld\n")
 	wantLine(t, lines, "hello")
 	wantLine(t, lines, "world")

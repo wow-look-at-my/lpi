@@ -8,13 +8,10 @@ import (
 	"path/filepath"
 )
 
-// currentVersion is the on-disk model format version.
+// currentVersion is the on-disk model format version
 const currentVersion = 1
 
-// envelope is the persisted form of a model; derived fields are rebuilt on
-// load. Invocations was added within version gob tolerates the field
-// being absent (old file, new reader) and unknown (new file, old reader)
-// alike, so no version bump is needed.
+// envelope is the persisted form of a model
 type envelope struct {
 	Version     int
 	Key         string
@@ -22,11 +19,7 @@ type envelope struct {
 	Invocations []string
 }
 
-// Save writes the model as a gzip-compressed gob envelope, creating parent
-// directories as needed. The write is atomic: the envelope goes to a temp
-// file in the same directory which is renamed over the target only it
-// is complete, so a crash or full disk mid-save can never destroy the
-// existing model or leave a truncated file that bricks the key.
+// Save writes the model as a gzip-compressed gob
 func (m *Model) Save(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
@@ -51,7 +44,7 @@ func (m *Model) Save(path string) error {
 	return nil
 }
 
-// writeEnvelope encodes the model onto f as gzipped gob.
+// writeEnvelope encodes the model onto f as gzipped
 func writeEnvelope(f *os.File, m *Model) error {
 	gz := gzip.NewWriter(f)
 	env := envelope{Version: currentVersion, Key: m.Key, Runs: m.Runs, Invocations: m.Invocations}
@@ -61,8 +54,7 @@ func writeEnvelope(f *os.File, m *Model) error {
 	return gz.Close()
 }
 
-// Load reads a model written by Save, rejecting unknown versions, and
-// rebuilds the derived fields.
+// Load reads a model written by Save, rejecting
 func Load(path string) (*Model, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -86,10 +78,7 @@ func Load(path string) (*Model, error) {
 	return m, nil
 }
 
-// DefaultDir returns the model database directory: $LPI_DB if set, else
-// $XDG_CACHE_HOME/log-progress-indicator, else
-// ~/.cache/log-progress-indicator (falling back to the system temp dir when
-// no home directory is known).
+// DefaultDir returns the model database directory
 func DefaultDir() string {
 	if dir := os.Getenv("LPI_DB"); dir != "" {
 		return dir
@@ -104,15 +93,12 @@ func DefaultDir() string {
 	return filepath.Join(home, ".cache", "log-progress-indicator")
 }
 
-// PathForKey maps a model key to its file path under dir: the key is
-// sanitized to (any other byte becomes '_', an empty result
-// becomes "default") and ".lpi" is appended.
+// PathForKey maps a model key to its file path
 func PathForKey(dir, key string) string {
 	return filepath.Join(dir, sanitizeKey(key)+".lpi")
 }
 
-// sanitizeKey maps a model key to a safe file-name fragment: bytes outside
-// become '_', and an empty result becomes "default".
+// sanitizeKey maps a model key to a safe file-name
 func sanitizeKey(key string) string {
 	san := make([]byte, 0, len(key))
 	for i := 0; i < len(key); i++ {

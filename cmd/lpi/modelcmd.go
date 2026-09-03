@@ -64,13 +64,10 @@ var modelListCmd = &cobra.Command{
 	},
 }
 
-// listLabelMax caps the LABEL column; invocation labels are command lines
-// and can be arbitrarily long.
+// listLabelMax caps the LABEL column; invocation
 const listLabelMax = 40
 
-// listLabel is the LABEL column value: the most recent invocation,
-// truncated, or "-" for models that never gained (repeating the key
-// would only add noise next to the KEY column).
+// listLabel is the LABEL column value: the most
 func listLabel(m *model.Model) string {
 	if len(m.Invocations) == 0 {
 		return "-"

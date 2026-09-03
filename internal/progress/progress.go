@@ -1,5 +1,4 @@
-// Package progress estimates how far along a live run is by matching its
-// lines against a model of previous completed runs.
+// Package progress estimates how far along a live
 package progress
 
 import (
@@ -9,10 +8,9 @@ import (
 	"github.com/wow-look-at-my/log-progress-indicator/internal/model"
 )
 
-// Snapshot is a point-in-time progress estimate.
+// Snapshot is a point-in-time progress estimate
 type Snapshot struct {
-	// Progress is the primary estimate in time-weighted, which equals
-	// units-weighted when the reference has no times.
+	// Progress is the primary estimate in
 	Progress   float64
 	UnitsDone  int
 	UnitsTotal int
@@ -30,18 +28,15 @@ type Snapshot struct {
 	MatchRate  float64
 	Confidence string // "high" | "medium" | "low" | "none"
 
-	// Identifying is set by the Chooser while it is still deciding which
-	// stored pattern the output belongs to; plain Estimators leave it
+	// Identifying is set by the Chooser while it is
 	Identifying bool
-	// Label is the display label of the pattern the Chooser locked onto;
-	// plain Estimators leave it
+	// Label is the display label of the pattern the
 	Label string
 
 	CurrentLines, MatchedLines, NovelLines, OverflowLines int
 }
 
-// Estimator consumes live log lines and tracks progress against a model.
-// It is not safe for concurrent use.
+// Estimator consumes live log lines and tracks
 type Estimator struct {
 	m          *model.Model
 	seen       map[uint64]int
@@ -54,17 +49,12 @@ type Estimator struct {
 	lastAt     time.Time
 }
 
-// NewEstimator returns an Estimator matching against m. An empty model
-// (TotalUnits as used by the live-learning baseline recording) is valid:
-// every line counts as novel, Progress and UnitsPct stay ETAKind and
-// Confidence stay "none", and no field ever becomes NaN or Inf.
+// NewEstimator returns an Estimator matching
 func NewEstimator(m *model.Model) *Estimator {
 	return &Estimator{m: m, seen: make(map[uint64]int)}
 }
 
-// Observe feeds live log line, stamped with the wall-clock time it was
-// seen if unknown). Lines whose normalized form is empty are skipped
-// entirely.
+// Observe feeds live log line, stamped with the
 func (e *Estimator) Observe(line string, at time.Time) {
 	norm := fingerprint.Normalize(line)
 	if norm == "" {
@@ -77,8 +67,7 @@ func (e *Estimator) Observe(line string, at time.Time) {
 	case !known:
 		e.novel++
 	case e.seen[fp] < len(occs):
-		// The k-th occurrence in the current log matches the k-th
-		// occurrence in the reference.
+		// The k-th occurrence in the current log matches
 		e.weightDone += float64(occs[e.seen[fp]].WeightFrac)
 		e.seen[fp]++
 		e.matched++
@@ -93,29 +82,28 @@ func (e *Estimator) Observe(line string, at time.Time) {
 	}
 }
 
-// Tick advances the clock without a line, so elapsed time keeps growing
-// through live silence.
+// Tick advances the clock without a line, so
 func (e *Estimator) Tick(at time.Time) {
 	if !at.IsZero() {
 		e.bumpClock(at)
 	}
 }
 
-// bumpClock moves lastAt forward monotonically.
+// bumpClock moves lastAt forward monotonically
 func (e *Estimator) bumpClock(at time.Time) {
 	if at.After(e.lastAt) {
 		e.lastAt = at
 	}
 }
 
-// ETA gating thresholds.
+// ETA gating thresholds
 const (
 	minPaceProgress    = 0.02
 	minPaceMatches     = 5
 	minRefPaceProgress = 0.001
 )
 
-// Snapshot returns the current estimate.
+// Snapshot returns the current estimate
 func (e *Estimator) Snapshot() Snapshot {
 	s := Snapshot{
 		UnitsDone:     e.matched,
@@ -144,8 +132,7 @@ func (e *Estimator) Snapshot() Snapshot {
 		s.MatchRate = float64(e.matched) / float64(e.current)
 	}
 	if s.UnitsTotal == 0 {
-		// An empty model (baseline recording) has nothing to match against,
-		// so confidence in the estimate is meaningless rather than low.
+		// An empty model (baseline recording) has nothing
 		s.Confidence = "none"
 	} else {
 		s.Confidence = confidence(e.current, s.MatchRate)
@@ -153,8 +140,7 @@ func (e *Estimator) Snapshot() Snapshot {
 	return s
 }
 
-// fillETA applies the ETA rules: a pace-adjusted ETA when enough is known,
-// the reference-pace fallback when elapsed is unknown, otherwise none.
+// fillETA applies the ETA rules: a pace-adjusted
 func (e *Estimator) fillETA(s *Snapshot) {
 	ref := s.RefDuration.Seconds()
 	switch {

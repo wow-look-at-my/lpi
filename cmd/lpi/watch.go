@@ -18,8 +18,7 @@ import (
 	"github.com/wow-look-at-my/log-progress-indicator/internal/timeparse"
 )
 
-// newSignalContext is a seam so tests can substitute a cancellable context
-// for the SIGINT/SIGTERM
+// newSignalContext is a seam so tests can
 var newSignalContext = func() (context.Context, context.CancelFunc) {
 	return signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 }
@@ -59,15 +58,11 @@ wall clock is used. Stop with Ctrl-C to get a final summary.`,
 			r:          render.New(cmd.ErrOrStderr()),
 			jsonStream: watchOpts.jsonStream,
 		}
-		// NDJSON snapshots are coordinated like child passthrough: when
-		// stdout shares a terminal with the stderr status line, a painted
-		// status is erased before each snapshot line and repainted after it
-		// (a piped stdout is returned unwrapped).
+		// NDJSON snapshots are coordinated like child
 		w.jsonW = w.r.Passthrough(cmd.OutOrStdout(), &w.mu)
 		w.loop(lines)
 		if err := <-tailErr; err != nil {
-			// Rendering is abandoned, not closed: end any painted status so
-			// the error report starts on a fresh line.
+			// Rendering is abandoned, not closed: end any
 			w.r.Break()
 			return err
 		}
@@ -76,9 +71,7 @@ wall clock is used. Stop with Ctrl-C to get a final summary.`,
 	},
 }
 
-// watcher holds the live state of watch invocation. The mutex
-// serializes estimator access (progress.Estimator is not concurrency-safe)
-// and doubles as the coordination lock of the NDJSON passthrough writer.
+// watcher holds the live state of watch invocation
 type watcher struct {
 	mu         sync.Mutex
 	est        *progress.Estimator
@@ -89,7 +82,7 @@ type watcher struct {
 	pending    []string // lines buffered until the time source is decided
 }
 
-// loop consumes line batches and ticks until the tailer closes the channel.
+// loop consumes line batches and ticks until the
 func (w *watcher) loop(lines <-chan string) {
 	ticker := time.NewTicker(tickInterval)
 	defer ticker.Stop()
@@ -104,7 +97,7 @@ func (w *watcher) loop(lines <-chan string) {
 		case <-ticker.C:
 			w.mu.Lock()
 			if w.feeder == nil && len(w.pending) > 0 {
-				// The initial burst has settled: commit to a time source.
+				// The initial burst has settled: commit to a time
 				w.decideLocked()
 			}
 			if w.feeder != nil && w.feeder.wall {
@@ -116,8 +109,7 @@ func (w *watcher) loop(lines <-chan string) {
 	}
 }
 
-// drainBatch collects everything immediately available after first, so a
-// burst is fed and rendered as batch.
+// drainBatch collects everything immediately
 func (w *watcher) drainBatch(first string, lines <-chan string) []string {
 	batch := []string{first}
 	for {
@@ -148,9 +140,7 @@ func (w *watcher) handleBatch(batch []string) {
 	}
 }
 
-// decideLocked picks the time source from the buffered lines -- the log's
-// own timestamps if detected, the wall clock otherwise (never both) -- and
-// replays the buffer. Callers hold w.mu.
+// decideLocked picks the time source from the
 func (w *watcher) decideLocked() {
 	format := timeparse.Detect(w.pending)
 	w.feeder = &lineFeeder{est: w.est, format: format, wall: format == nil}
@@ -160,8 +150,7 @@ func (w *watcher) decideLocked() {
 	w.pending = nil
 }
 
-// update repaints the status line and, when streaming, emits NDJSON
-// snapshot.
+// update repaints the status line and, when
 func (w *watcher) update() {
 	w.mu.Lock()
 	s := w.est.Snapshot()
@@ -172,7 +161,7 @@ func (w *watcher) update() {
 	}
 }
 
-// finish flushes any undecided buffer and prints the final summary.
+// finish flushes any undecided buffer and prints
 func (w *watcher) finish(cmd *cobra.Command) {
 	w.mu.Lock()
 	if w.feeder == nil && len(w.pending) > 0 {

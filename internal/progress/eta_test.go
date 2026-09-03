@@ -10,8 +10,7 @@ import (
 
 var wallBase = time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
 
-// paceModel: lines, apart, reference duration every line but
-// the first owns of the run.
+// paceModel: lines, apart, reference duration every
 func paceEstimator(t *testing.T) *Estimator {
 	t.Helper()
 	return NewEstimator(timedModel(t, steps(12), uniform(12, 10*time.Second)))
@@ -20,7 +19,7 @@ func paceEstimator(t *testing.T) *Estimator {
 func TestETAPaceMath(t *testing.T) {
 	e := paceEstimator(t)
 	lines := steps(12)
-	// Replay lines at wall intervals: half the reference speed.
+	// Replay lines at wall intervals: the reference
 	for i, ln := range lines[:6] {
 		e.Observe(ln, wallBase.Add(time.Duration(i)*20*time.Second))
 	}
@@ -32,7 +31,7 @@ func TestETAPaceMath(t *testing.T) {
 
 	require.Equal(t, "pace", s.ETAKind)
 	assert.InDelta(t, 2.0, s.Pace, 1e-3, "running at half the reference speed")
-	// Remaining of a reference at half speed:
+	// Remaining of a reference at speed
 	assert.InDelta(t, 120.0, s.ETA.Seconds(), 0.1)
 }
 
@@ -56,7 +55,7 @@ func TestETARefPaceFallbackWithoutElapsed(t *testing.T) {
 	require.False(t, s.ElapsedKnown)
 	require.Equal(t, "ref-pace", s.ETAKind)
 	assert.Zero(t, s.Pace)
-	// Remaining of the reference at face value:
+	// Remaining of the reference at face value
 	assert.InDelta(t, 60.0, s.ETA.Seconds(), 0.1)
 }
 
@@ -88,7 +87,7 @@ func TestETANoneCases(t *testing.T) {
 	})
 	t.Run("progress below ref-pace floor", func(t *testing.T) {
 		e := paceEstimator(t)
-		e.Observe(steps(12)[0], time.Time{}) // first line owns no weight
+		e.Observe(steps(12)[0], time.Time{}) // line owns no weight
 		s := e.Snapshot()
 		assert.Zero(t, s.Progress)
 		assert.Equal(t, "none", s.ETAKind)

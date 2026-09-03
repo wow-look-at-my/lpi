@@ -56,10 +56,7 @@ func TestSaveLoadKeepsInvocations(t *testing.T) {
 	assert.Equal(t, "make", got.DisplayLabel())
 }
 
-// TestLoadOldFormatWithoutInvocations pins compatibility: a file
-// written before the Invocations field existed (same version, field
-// fewer) must still load -- gob matches struct fields by name and leaves
-// absent ones
+// TestLoadOldFormatWithoutInvocations pins
 func TestLoadOldFormatWithoutInvocations(t *testing.T) {
 	type legacyEnvelope struct {
 		Version int
@@ -130,11 +127,7 @@ func TestSaveErrors(t *testing.T) {
 	})
 }
 
-// TestSaveFailureLeavesExistingModelIntact pins the atomic-save guarantee.
-// The target name is a valid path, but the temp file's longer name exceeds
-// the Linux NAME_MAX of bytes, so the save fails before touching the
-// target -- the pre-existing model must survive byte-identical. (The env
-// runs as root, so permission-based failures cannot be used here.)
+// TestSaveFailureLeavesExistingModelIntact pins the
 func TestSaveFailureLeavesExistingModelIntact(t *testing.T) {
 	dir := t.TempDir()
 	base := strings.Repeat("k", 246) + ".lpi" // bytes: valid target, oversize temp
@@ -161,9 +154,7 @@ func TestSaveFailureLeavesExistingModelIntact(t *testing.T) {
 	assert.Len(t, got.Runs, 1)
 }
 
-// TestSaveFailedRenameKeepsTargetAndLeavesNoLitter drives Save through a
-// failing final rename (the target is a non-empty directory) and checks the
-// target's contents survive and no temp file is left behind.
+// TestSaveFailedRenameKeepsTargetAndLeavesNoLitter
 func TestSaveFailedRenameKeepsTargetAndLeavesNoLitter(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "k.lpi")

@@ -15,7 +15,7 @@ import (
 
 var digestBase = time.Date(2026, 7, 2, 10, 0, 0, 0, time.UTC)
 
-// digestAt builds a timed run from parallel line/offset slices via LineAt.
+// digestAt builds a timed run from parallel
 func digestAt(t *testing.T, source string, lines []string, offsets []time.Duration) *Run {
 	t.Helper()
 	require.Equal(t, len(lines), len(offsets))
@@ -28,7 +28,7 @@ func digestAt(t *testing.T, source string, lines []string, offsets []time.Durati
 	return run
 }
 
-// digestPlain builds a position-mode run.
+// digestPlain builds a position-mode run
 func digestPlain(t *testing.T, source string, lines []string) *Run {
 	t.Helper()
 	d := NewDigester(source, nil)
@@ -40,7 +40,7 @@ func digestPlain(t *testing.T, source string, lines []string) *Run {
 	return run
 }
 
-// clockFormat obtains a bare-time format through the public Detect API.
+// clockFormat obtains a bare-time format through
 func clockFormat(t *testing.T) *timeparse.Format {
 	t.Helper()
 	f := timeparse.Detect([]string{

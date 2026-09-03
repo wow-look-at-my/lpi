@@ -116,8 +116,7 @@ func TestDetectThresholds(t *testing.T) {
 }
 
 func TestDetectReturnsFreshState(t *testing.T) {
-	// The returned Format must start with clean rollover state even though
-	// detection itself exercised the probes.
+	// The returned Format must start with clean
 	f := Detect(genLines(10, "15:04:%02d building"))
 	require.NotNil(t, f)
 	assert.True(t, f.last.IsZero())

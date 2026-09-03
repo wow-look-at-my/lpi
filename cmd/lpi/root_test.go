@@ -24,9 +24,7 @@ func TestVersionFlag(t *testing.T) {
 	assert.Contains(t, out.String(), "dev")
 }
 
-// setOSArgs pins os.Args for tests that go through Execute, which routes
-// the real process arguments (the test binary's own flags otherwise leak
-// into cobra).
+// setOSArgs pins os.Args for tests that go through
 func setOSArgs(t *testing.T, args ...string) {
 	t.Helper()
 	old := os.Args

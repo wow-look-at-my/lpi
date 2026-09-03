@@ -14,8 +14,7 @@ import (
 
 var refBase = time.Date(2026, 7, 2, 10, 0, 0, 0, time.UTC)
 
-// steps returns n distinct log lines with no digits (digits would be
-// normalized away and collapse the fingerprints).
+// steps returns n distinct log lines with no digits
 func steps(n int) []string {
 	lines := make([]string, n)
 	for i := range lines {
@@ -24,7 +23,7 @@ func steps(n int) []string {
 	return lines
 }
 
-// uniform returns offsets gap, ... for n lines.
+// uniform returns offsets gap, ..
 func uniform(n int, gap time.Duration) []time.Duration {
 	offs := make([]time.Duration, n)
 	for i := range offs {
@@ -206,10 +205,7 @@ func TestEmptyModelEverythingNovel(t *testing.T) {
 	assert.Equal(t, "none", s.Confidence, "an empty model has nothing to be confident about")
 }
 
-// TestEmptyModelSnapshotStaysFinite pins the baseline-recording state: an
-// estimator over an empty model (as used by the live-learning bootstrap)
-// must keep every field sane and never emit NaN or Inf, even with a live
-// clock running.
+// TestEmptyModelSnapshotStaysFinite pins the
 func TestEmptyModelSnapshotStaysFinite(t *testing.T) {
 	e := NewEstimator(model.New("empty"))
 	e.Observe("first baseline line", refBase)

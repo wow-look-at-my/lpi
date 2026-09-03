@@ -54,8 +54,7 @@ present, elapsed time and a pace-adjusted ETA come from them.`,
 	},
 }
 
-// analyzeReader buffers the first lines for timestamp detection, then
-// streams every line through the estimator.
+// analyzeReader buffers the lines for timestamp
 func analyzeReader(r io.Reader, est *progress.Estimator) error {
 	sc := linescan.NewScanner(r)
 	var sample []string

@@ -94,7 +94,7 @@ func TestNormalizeCapsAt512(t *testing.T) {
 	assert.Len(t, got, 512)
 	assert.Equal(t, strings.Repeat("x", 512), got)
 
-	// Multi-token long lines truncate to the same prefix a full pass yields.
+	// Multi-token long lines truncate to the same
 	mixed := strings.Repeat("word 123 ", 200)
 	got = Normalize(mixed)
 	assert.LessOrEqual(t, len(got), 512)

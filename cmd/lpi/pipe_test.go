@@ -45,11 +45,7 @@ func TestPipeWeirdBytesStayIntact(t *testing.T) {
 	assert.Equal(t, weird, out)
 }
 
-// TestPipeTTYStatusNeverGluesToPassthrough covers the TTY half of the
-// glued-status bug for pipe: stdout must stay byte-faithful (no rendering
-// escapes leaking in) and the stderr status line must never share a
-// rendered terminal line with forwarded text, even when the input ends with
-// a partial line.
+// TestPipeTTYStatusNeverGluesToPassthrough covers
 func TestPipeTTYStatusNeverGluesToPassthrough(t *testing.T) {
 	db := seedDemoModel(t)
 	forceTTY(t, true)
@@ -62,8 +58,7 @@ func TestPipeTTYStatusNeverGluesToPassthrough(t *testing.T) {
 	assertStatusOwnsLines(t, renderScrollback(errOut))
 }
 
-// TestPipePlainStatusLinesAreWholeLines locks the plain-mode discipline for
-// pipe: complete status lines only, no escape sequences.
+// TestPipePlainStatusLinesAreWholeLines locks the
 func TestPipePlainStatusLinesAreWholeLines(t *testing.T) {
 	db := seedDemoModel(t)
 	shortTicks(t) // PlainInterval = a status line per update
@@ -101,7 +96,7 @@ func TestPipeBootstrapsLearnKey(t *testing.T) {
 	data, err := os.ReadFile(demoPartial)
 	require.NoError(t, err)
 
-	// First invocation: --learn-key alone, no model yet -> baseline recording.
+	// invocation: --learn-key alone, no model yet ->
 	out, errOut, err := execLpi(t, bytes.NewReader(data), "pipe",
 		"--db", db, "--learn-key", "fresh")
 	require.NoError(t, err)
@@ -111,7 +106,7 @@ func TestPipeBootstrapsLearnKey(t *testing.T) {
 	assert.Contains(t, errOut, "Reference:   none yet (recording baseline)")
 	assert.Contains(t, errOut, `into key "fresh" (1 runs)`)
 
-	// Second invocation: --learn-key doubles as the reference key.
+	// invocation: --learn-key doubles as the reference
 	_, errOut, err = execLpi(t, bytes.NewReader(data), "pipe",
 		"--db", db, "--learn-key", "fresh")
 	require.NoError(t, err)
@@ -153,7 +148,7 @@ func TestPipeBootstrapJSONStreamStaysFinite(t *testing.T) {
 }
 
 func TestPipeMissingForeignKeyStillErrors(t *testing.T) {
-	// A --key naming a different key than --learn-key gets no bootstrap.
+	// A --key naming a different key than --learn-key
 	_, _, err := execLpi(t, strings.NewReader("x\n"), "pipe",
 		"--db", t.TempDir(), "--key", "other", "--learn-key", "fresh")
 	require.ErrorContains(t, err, `no model for key "other"`)
@@ -167,7 +162,7 @@ func TestPipeLearnTooShort(t *testing.T) {
 	assert.Empty(t, pendingFiles(t, db), "fewer than 2 nonempty lines is nothing worth recovering")
 }
 
-// errAfterReader yields its data, then fails with err instead of EOF.
+// errAfterReader yields its data, then fails with
 type errAfterReader struct {
 	data []byte
 	err  error
@@ -199,21 +194,13 @@ func TestPipeScannerErrorKeepsCapture(t *testing.T) {
 	assert.True(t, os.IsNotExist(err), "the interrupted stream must not be learned")
 }
 
-// TestPipeInterruptKeepsCaptureAndSkipsLearn covers the Ctrl-C race: the
-// same signal that kills the upstream would EOF stdin and trigger the
-// unconditional EOF-learn of a truncated stream. The handler must win: keep
-// the capture, report, and exit without learning. It runs on a forced
-// TTY, so it also proves the interrupt notice and recovery lines fire
-// through the renderer mid-render: the painted status is erased and each
-// message owns a whole terminal line instead of gluing onto the status.
+// TestPipeInterruptKeepsCaptureAndSkipsLearn covers
 func TestPipeInterruptKeepsCaptureAndSkipsLearn(t *testing.T) {
 	db := seedDemoModel(t)
 	code := captureExit(t)
 	forceTTY(t, true)
 
-	// Keep the process alive if the signal beats pipe's handler
-	// registration (the runtime disables the default death while any
-	// channel is notified).
+	// Keep the process alive if the signal beats pipe's
 	guard := make(chan os.Signal, 1)
 	signal.Notify(guard, syscall.SIGINT)
 	defer signal.Stop(guard)
@@ -239,8 +226,7 @@ func TestPipeInterruptKeepsCaptureAndSkipsLearn(t *testing.T) {
 	_, err = model.Load(model.PathForKey(db, "captured"))
 	assert.True(t, os.IsNotExist(err), "a truncated stream must never be learned")
 
-	// The terminal scrollback is exactly the messages: the transient
-	// status was erased before the notice, and no line mixes the
+	// The terminal scrollback is exactly the messages
 	assert.Equal(t, []string{
 		"interrupted -- run not learned",
 		"captured log kept: " + files[0],
@@ -248,10 +234,7 @@ func TestPipeInterruptKeepsCaptureAndSkipsLearn(t *testing.T) {
 	}, renderScrollback(errOut))
 }
 
-// TestPipeScannerErrorRecoveryOwnsLinesOnTTY drives a mid-stream read error
-// while a TTY status is painted: rendering is abandoned with the status
-// committed on its own line, and the recovery instructions each own a whole
-// line instead of gluing onto the painted status.
+// TestPipeScannerErrorRecoveryOwnsLinesOnTTY drives
 func TestPipeScannerErrorRecoveryOwnsLinesOnTTY(t *testing.T) {
 	db := seedDemoModel(t)
 	forceTTY(t, true)
@@ -269,8 +252,7 @@ func TestPipeScannerErrorRecoveryOwnsLinesOnTTY(t *testing.T) {
 	assert.Contains(t, lines, "learn it later with: lpi learn --key captured --db "+db+" "+files[0])
 }
 
-// TestPipeLearnSaveFailureKeepsCapture drives the save to fail (model file
-// name past the OS limit) and checks the capture survives with hints.
+// TestPipeLearnSaveFailureKeepsCapture drives the
 func TestPipeLearnSaveFailureKeepsCapture(t *testing.T) {
 	db := t.TempDir()
 	longKey := strings.Repeat("p", 246)

@@ -1,5 +1,4 @@
-// Package model digests completed reference logs into runs and merges runs
-// into the expectation model consumed by the progress estimator.
+// Package model digests completed reference logs
 package model
 
 import (
@@ -15,17 +14,15 @@ import (
 	"github.com/wow-look-at-my/log-progress-indicator/internal/timeparse"
 )
 
-// Occurrence is expected appearance of a fingerprint within a run.
+// Occurrence is expected appearance of a
 type Occurrence struct {
-	// TimeFrac is the completion time of this occurrence as a fraction of
-	// the run duration (line-index fraction when the run has no times).
+	// TimeFrac is the completion time of this
 	TimeFrac float32
-	// WeightFrac is the share of the total run duration this occurrence
-	// owns: the gap between it and the previous line of the run.
+	// WeightFrac is the share of the total run duration
 	WeightFrac float32
 }
 
-// Run is the digest of completed reference run.
+// Run is the digest of completed reference run
 type Run struct {
 	Source   string
 	Lines    int           // nonempty lines digested
@@ -34,17 +31,15 @@ type Run struct {
 	Occ      map[uint64][]Occurrence
 }
 
-// rawOcc is line observation prior to fraction conversion.
+// rawOcc is line observation prior to fraction
 type rawOcc struct {
 	idx   int           // nonempty line index
 	at    time.Time     // effective (monotonic) time; valid when timed
 	gap   time.Duration // time since the previous line
-	timed bool          // false only before the first timestamp of the run
+	timed bool          // false only before the timestamp of the run
 }
 
-// Digester incrementally consumes run's log lines. Feed lines with Line
-// (timestamps parsed via the format, if any) or LineAt (explicit times, for
-// live-recorded runs), then call Finish.
+// Digester incrementally consumes run's log lines
 type Digester struct {
 	source string
 	format *timeparse.Format
@@ -55,14 +50,12 @@ type Digester struct {
 	haveT  bool
 }
 
-// NewDigester returns a Digester for run. A nil format means position
-// mode: line indices stand in for times unless LineAt supplies them.
+// NewDigester returns a Digester for run
 func NewDigester(source string, format *timeparse.Format) *Digester {
 	return &Digester{source: source, format: format, occ: make(map[uint64][]rawOcc)}
 }
 
-// Line feeds raw log line, parsing its timestamp with the configured
-// format when was given.
+// Line feeds raw log line, parsing its timestamp
 func (d *Digester) Line(text string) {
 	var at time.Time
 	if d.format != nil {
@@ -73,8 +66,7 @@ func (d *Digester) Line(text string) {
 	d.add(text, at)
 }
 
-// LineAt feeds raw log line stamped with an explicit time if
-// unknown).
+// LineAt feeds raw log line stamped with an
 func (d *Digester) LineAt(text string, at time.Time) {
 	d.add(text, at)
 }
@@ -103,17 +95,16 @@ func (d *Digester) add(text string, at time.Time) {
 		ro.at = eff
 		ro.timed = true
 	case d.haveT:
-		// No timestamp on this line: carry the previous time forward.
+		// No timestamp on this line: carry the previous
 		ro.at = d.prev
 		ro.timed = true
 	default:
-		// Before the first timestamp: pinned to the run start at Finish.
+		// Before the timestamp: pinned to the run start at
 	}
 	d.occ[fp] = append(d.occ[fp], ro)
 }
 
-// Finish converts the accumulated observations into a Run. It fails when
-// fewer than nonempty lines were digested.
+// Finish converts the accumulated observations into
 func (d *Digester) Finish() (*Run, error) {
 	if d.count < 2 {
 		return nil, errors.New("model: need at least 2 nonempty log lines")
@@ -126,8 +117,7 @@ func (d *Digester) Finish() (*Run, error) {
 	if dur > 0 {
 		d.finishTimed(run, dur)
 	} else {
-		// No usable times (none given, none parsed, or span): position
-		// mode, where line indices stand in for times.
+		// No usable times (none given, none parsed, or
 		d.finishPositional(run)
 	}
 	return run, nil
@@ -146,7 +136,7 @@ func (d *Digester) finishTimed(run *Run, dur time.Duration) {
 					WeightFrac: float32(float64(ro.gap) / fdur),
 				}
 			}
-			// !ro.timed: before the first timestamp -> TimeFrac weight
+			// !ro.timed: before the timestamp -> TimeFrac weight
 		}
 		run.Occ[fp] = occs
 	}
@@ -166,7 +156,7 @@ func (d *Digester) finishPositional(run *Run) {
 	}
 }
 
-// DigestReader digests all lines from r into a Run.
+// DigestReader digests all lines from r into a Run
 func DigestReader(r io.Reader, source string, format *timeparse.Format) (*Run, error) {
 	d := NewDigester(source, format)
 	sc := linescan.NewScanner(r)
@@ -179,15 +169,10 @@ func DigestReader(r io.Reader, source string, format *timeparse.Format) (*Run, e
 	return d.Finish()
 }
 
-// detectLines is how many leading lines DigestFile samples for timestamp
-// format detection.
+// detectLines is how many leading lines DigestFile
 const detectLines = 300
 
-// DigestFile digests a log file into a Run. Gzip files are handled
-// transparently (sniffed via magic bytes), as are lpi capture files (sniffed
-// via their header line), whose records carry the exact per-line times of
-// the recorded run. For plain logs the first lines are sampled for
-// timeparse.Detect, then the whole file is digested.
+// DigestFile digests a log file into a Run
 func DigestFile(path string) (*Run, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -228,10 +213,7 @@ func DigestFile(path string) (*Run, error) {
 	return d.Finish()
 }
 
-// digestCapture digests the records following a capture-file header via
-// per-record explicit times, reconstructing the run exactly as it was
-// digested live. The header's source label becomes Run.Source when present;
-// otherwise the file path does, matching plain-log behavior.
+// digestCapture digests the records following a
 func digestCapture(sc *linescan.Scanner, path, label string) (*Run, error) {
 	source := path
 	if label != "" {

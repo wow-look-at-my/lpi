@@ -23,7 +23,7 @@ func TestAnalyzeHumanSummary(t *testing.T) {
 	assert.Contains(t, out, "Reference:")
 }
 
-// jsonSnapshotKeys is the pinned public schema of --json/--json-stream.
+// jsonSnapshotKeys is the pinned public schema of
 var jsonSnapshotKeys = []string{
 	"progress", "units_done", "units_total", "units_pct", "has_times",
 	"elapsed_seconds", "elapsed_known", "ref_duration_seconds", "eta_seconds",
@@ -75,7 +75,7 @@ func TestAnalyzeStdin(t *testing.T) {
 }
 
 func TestAnalyzeAdhocRefsAndGzip(t *testing.T) {
-	// Gzip reference on the fly; DigestFile must sniff and decompress.
+	// Gzip reference on the fly; DigestFile must sniff
 	data, err := os.ReadFile(demoBuild1)
 	require.NoError(t, err)
 	gzPath := filepath.Join(t.TempDir(), "build1.log.gz")

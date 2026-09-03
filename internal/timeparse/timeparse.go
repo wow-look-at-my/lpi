@@ -1,8 +1,4 @@
-// Package timeparse detects and parses per-line timestamps of log files.
-// Live modes use the wall clock instead; this package is for logs on disk.
-//
-// Only differences between parsed times are meaningful: date-less formats
-// parse onto a fixed arbitrary base day.
+// Package timeparse detects and parses per-line
 package timeparse
 
 import (
@@ -10,13 +6,12 @@ import (
 	"time"
 )
 
-// baseDay anchors date-less formats (bare clock times, dmesg offsets).
+// baseDay anchors date-less formats (bare clock
 var baseDay = time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
 
 type kind int
 
-// Kinds are listed in detection priority order: more specific formats first,
-// so ties go to the least ambiguous format.
+// Kinds are listed in detection priority order
 const (
 	kindISO kind = iota
 	kindGoLog
@@ -29,20 +24,17 @@ const (
 
 var kindNames = [numKinds]string{"iso8601", "golog", "syslog", "epoch", "dmesg", "clock"}
 
-// Format parses timestamp flavor. Parse is stateful -- bare clock times
-// roll over midnight -- so a Format must not be shared between goroutines.
+// Format parses timestamp flavor
 type Format struct {
 	kind      kind
 	last      time.Time
 	dayOffset time.Duration
 }
 
-// Name returns a short identifier for the format "clock", ...).
+// Name returns a short identifier for the format
 func (f *Format) Name() string { return kindNames[f.kind] }
 
-// Parse extracts this format's timestamp from the start of line. Lines that
-// do not match return ok == false; the caller carries the previous time
-// forward. An optional leading '[' plus spaces is tolerated for all formats.
+// Parse extracts this format's timestamp from the
 func (f *Format) Parse(line string) (time.Time, bool) {
 	s, bracket := stripLead(line)
 	switch f.kind {
@@ -65,10 +57,7 @@ func (f *Format) Parse(line string) (time.Time, bool) {
 	}
 }
 
-// rollover applies stateful midnight handling for bare clock times: when a
-// new time is earlier than the last seen by more than hours, a day is
-// added. The accumulated day offset persists across calls, so multi-midnight
-// runs keep increasing.
+// rollover applies stateful midnight handling for
 func (f *Format) rollover(t time.Time) time.Time {
 	t = t.Add(f.dayOffset)
 	for !f.last.IsZero() && t.Before(f.last.Add(-2*time.Hour)) {
@@ -85,9 +74,7 @@ const (
 	detectMinRate = 0.3
 )
 
-// Detect samples up to lines and returns the format that matches the
-// most lines, provided it matches at least of the non-empty sample and
-// has at least hits. It returns nil when no format qualifies.
+// Detect samples up to lines and returns the format
 func Detect(lines []string) *Format {
 	if len(lines) > detectSample {
 		lines = lines[:detectSample]

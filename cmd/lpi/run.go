@@ -71,8 +71,7 @@ yet) and the next invocation gets a real estimate. With a --ref, a missing
 			err       error
 		)
 		if learning {
-			// The run will be recorded anyway, so a missing key just means
-			// this run becomes the baseline instead of being estimated.
+			// The run will be recorded anyway, so a missing key
 			m, bootstrap, err = runOpts.rf.resolveOrBootstrap(runOpts.rf.key)
 		} else {
 			m, err = runOpts.rf.resolve()
@@ -93,9 +92,7 @@ yet) and the next invocation gets a real estimate. With a --ref, a missing
 		}
 		exitCode, err := lv.execute(cmd, args)
 		if err != nil {
-			// Transport failure (e.g. the command could not start): end any
-			// in-progress status line so the error report starts fresh, and
-			// keep whatever was captured if it is worth keeping.
+			// Transport failure (e.g
 			lv.r.Break()
 			if lv.dig != nil {
 				keepOrDiscardCapture(lv.msg, lv.dig, lv.capture, runOpts.rf.db, runOpts.rf.key)
@@ -118,13 +115,7 @@ yet) and the next invocation gets a real estimate. With a --ref, a missing
 	},
 }
 
-// finishLearn completes the learning side of a run the child has
-// exited: on success (exit or --learn-on-failure) the digest is saved
-// into the model and the capture file removed; on a failed run the digest
-// is dropped -- a truncated log would corrupt the time-gap weights -- but
-// the capture file is kept and the recovery command printed, so the data
-// is never lost. args is the wrapped command line, recorded on the model
-// as its invocation label.
+// finishLearn completes the learning side of a run
 func (lv *liveRun) finishLearn(errW io.Writer, exitCode int, args []string) error {
 	db, key := runOpts.rf.db, runOpts.rf.key
 	if exitCode != 0 && !runOpts.learnOnFailure {
@@ -134,7 +125,7 @@ func (lv *liveRun) finishLearn(errW io.Writer, exitCode int, args []string) erro
 	}
 	run, err := lv.dig.Finish()
 	if err != nil {
-		// The only Finish failure is nonempty lines: nothing recoverable.
+		// The only Finish failure is nonempty lines
 		lv.capture.Discard()
 		return fmt.Errorf("run not learned: %w", err)
 	}
@@ -146,21 +137,14 @@ func (lv *liveRun) finishLearn(errW io.Writer, exitCode int, args []string) erro
 	return nil
 }
 
-// feeder is the estimator-shaped dependency of liveRun: a plain
-// progress.Estimator for the explicit-key modes, or a progress.Chooser for
-// auto mode.
+// feeder is the estimator-shaped dependency of
 type feeder interface {
 	Observe(string, time.Time)
 	Tick(time.Time)
 	Snapshot() progress.Snapshot
 }
 
-// liveRun is the shared live state of run invocation. The mutex
-// serializes the estimator, digester, capture writer, and renderer across
-// the stdout consumer, stderr consumer, and ticker goroutines; passthrough
-// writes on both streams share it via the renderer's Passthrough writers,
-// and lpi's own out-of-band lines go through msg (the renderer's Message)
-// under the same mutex.
+// liveRun is the shared live state of run invocation
 type liveRun struct {
 	mu      sync.Mutex
 	est     feeder
@@ -170,8 +154,7 @@ type liveRun struct {
 	msg     notify
 }
 
-// execute spawns the child and pumps its output until it exits, returning
-// the child's exit code.
+// execute spawns the child and pumps its output
 func (lv *liveRun) execute(cmd *cobra.Command, args []string) (int, error) {
 	child := exec.Command(args[0], args[1:]...)
 	child.Stdin = os.Stdin
@@ -187,8 +170,7 @@ func (lv *liveRun) execute(cmd *cobra.Command, args []string) (int, error) {
 		return 0, err
 	}
 
-	// Forward interrupts to the child; lpi itself survives to print the
-	// final summary and propagate the exit code.
+	// Forward interrupts to the child; lpi itself
 	sigc := make(chan os.Signal, 2)
 	signal.Notify(sigc, os.Interrupt, syscall.SIGTERM)
 	go func() {
@@ -197,9 +179,7 @@ func (lv *liveRun) execute(cmd *cobra.Command, args []string) (int, error) {
 		}
 	}()
 
-	// Both passthrough streams coordinate with the renderer under lv.mu, so
-	// a painted status line is erased before child bytes reach the terminal
-	// and repainted after them -- the never share a terminal line.
+	// Both passthrough streams coordinate with the
 	outW := lv.r.Passthrough(cmd.OutOrStdout(), &lv.mu)
 	errW := lv.r.Passthrough(cmd.ErrOrStderr(), &lv.mu)
 	var wg sync.WaitGroup
@@ -249,13 +229,7 @@ func (lv *liveRun) execute(cmd *cobra.Command, args []string) (int, error) {
 	return 0, nil
 }
 
-// childExitCode maps the child's ExitError to the code lpi propagates: the
-// child's own exit code, or when signal N killed it (the shell
-// convention: SIGTERM -> The syscall.WaitStatus assertion is kept in
-// this file rather than behind build tags because the type exists on
-// every GOOS this package already builds on (it requires syscall.SIGTERM
-// above); non-Unix implementations simply report Signaled() == false and
-// fall through to the generic path.
+// childExitCode maps the child's ExitError to the
 func childExitCode(ee *exec.ExitError) int {
 	if ws, ok := ee.ProcessState.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
 		return 128 + int(ws.Signal())
@@ -266,11 +240,7 @@ func childExitCode(ee *exec.ExitError) int {
 	return 1
 }
 
-// consume forwards child stream byte-faithfully (the tee sits at the
-// reader) while feeding its lines to the estimator with wall-clock times.
-// When learning, every line the digester consumes is also appended to the
-// capture file with the same stamp, so replaying the file reconstructs the
-// digest exactly.
+// consume forwards child stream byte-faithfully
 func (lv *liveRun) consume(pipe io.Reader, passthrough io.Writer) {
 	sc := linescan.NewScanner(io.TeeReader(pipe, passthrough))
 	for sc.Scan() {
