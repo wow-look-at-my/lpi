@@ -40,6 +40,7 @@ func cancelWatchAfter(t *testing.T, d time.Duration) {
 }
 
 func TestWatchTimestampedFile(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	cancelWatchAfter(t, 400*time.Millisecond)
@@ -81,6 +82,7 @@ func TestWatchTimestampedFile(t *testing.T) {
 
 // TestWatchJSONStreamTTYKeepsStreamsClean covers
 func TestWatchJSONStreamTTYKeepsStreamsClean(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	forceTTY(t, true)
@@ -103,6 +105,7 @@ func TestWatchJSONStreamTTYKeepsStreamsClean(t *testing.T) {
 }
 
 func TestWatchWallClockMode(t *testing.T) {
+	t.Serial()
 	shortTicks(t)
 	cancelWatchAfter(t, 300*time.Millisecond)
 
@@ -125,6 +128,7 @@ func TestWatchWallClockMode(t *testing.T) {
 }
 
 func TestWatchFromStartFalseSkipsHistory(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	cancelWatchAfter(t, 250*time.Millisecond)
@@ -141,6 +145,7 @@ func TestWatchFromStartFalseSkipsHistory(t *testing.T) {
 }
 
 func TestWatchHardError(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	_, _, err := execLpi(t, nil, "watch", "--db", db, "--key", "demo", "--interval", "5ms", t.TempDir())
@@ -148,6 +153,7 @@ func TestWatchHardError(t *testing.T) {
 }
 
 func TestWatchNoReference(t *testing.T) {
+	t.Serial()
 	_, _, err := execLpi(t, nil, "watch", "somefile.log")
 	require.ErrorContains(t, err, "no reference given")
 }

@@ -13,6 +13,7 @@ import (
 )
 
 func TestAnalyzeHumanSummary(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	out, _, err := execLpi(t, nil, "analyze", "--db", db, "--key", "demo", demoPartial)
 	require.NoError(t, err)
@@ -32,6 +33,7 @@ var jsonSnapshotKeys = []string{
 }
 
 func TestAnalyzeJSON(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	out, _, err := execLpi(t, nil, "analyze", "--db", db, "--key", "demo", "--json", demoPartial)
 	require.NoError(t, err)
@@ -56,6 +58,7 @@ func TestAnalyzeJSON(t *testing.T) {
 }
 
 func TestAnalyzeJSONOmitsETAWhenNone(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	out, _, err := execLpi(t, strings.NewReader("\n \n"), "analyze", "--db", db, "--key", "demo", "--json", "-")
 	require.NoError(t, err)
@@ -66,6 +69,7 @@ func TestAnalyzeJSONOmitsETAWhenNone(t *testing.T) {
 }
 
 func TestAnalyzeStdin(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	data, err := os.ReadFile(demoPartial)
 	require.NoError(t, err)
@@ -75,6 +79,7 @@ func TestAnalyzeStdin(t *testing.T) {
 }
 
 func TestAnalyzeAdhocRefsAndGzip(t *testing.T) {
+	t.Serial()
 	// Gzip reference on the fly; DigestFile must sniff
 	data, err := os.ReadFile(demoBuild1)
 	require.NoError(t, err)
@@ -93,6 +98,7 @@ func TestAnalyzeAdhocRefsAndGzip(t *testing.T) {
 }
 
 func TestAnalyzeKeyPlusExtraRef(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	out, _, err := execLpi(t, nil, "analyze", "--db", db, "--key", "demo", "--ref", demoBuild1, demoPartial)
 	require.NoError(t, err)
@@ -100,6 +106,7 @@ func TestAnalyzeKeyPlusExtraRef(t *testing.T) {
 }
 
 func TestAnalyzeErrors(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 
 	_, _, err := execLpi(t, nil, "analyze", demoPartial)

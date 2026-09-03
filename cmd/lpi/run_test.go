@@ -27,6 +27,7 @@ func captureExit(t *testing.T) *int {
 }
 
 func TestRunPassthroughAndExitZero(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	code := captureExit(t)
@@ -42,6 +43,7 @@ func TestRunPassthroughAndExitZero(t *testing.T) {
 }
 
 func TestRunPropagatesExitCode(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	code := captureExit(t)
@@ -54,6 +56,7 @@ func TestRunPropagatesExitCode(t *testing.T) {
 }
 
 func TestRunLearnOnSuccess(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	captureExit(t)
@@ -69,6 +72,7 @@ func TestRunLearnOnSuccess(t *testing.T) {
 }
 
 func TestRunLearnSkippedOnFailure(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	code := captureExit(t)
@@ -82,6 +86,7 @@ func TestRunLearnSkippedOnFailure(t *testing.T) {
 }
 
 func TestRunForwardsSignals(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	code := captureExit(t)
@@ -101,6 +106,7 @@ func TestRunForwardsSignals(t *testing.T) {
 }
 
 func TestRunSignalKilledChildNotLearned(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	code := captureExit(t)
@@ -119,6 +125,7 @@ func TestRunSignalKilledChildNotLearned(t *testing.T) {
 }
 
 func TestRunBootstrapsMissingKeyWithLearn(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	shortTicks(t)
 	captureExit(t)
@@ -146,6 +153,7 @@ func TestRunBootstrapsMissingKeyWithLearn(t *testing.T) {
 }
 
 func TestRunMissingKeyStillErrors(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 
 	// Without --learn there is nothing to record: a
@@ -160,6 +168,7 @@ func TestRunMissingKeyStillErrors(t *testing.T) {
 
 // TestRunFailureKeepsCaptureAndRescues is the
 func TestRunFailureKeepsCaptureAndRescues(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	code := captureExit(t)
@@ -216,6 +225,7 @@ func TestRunFailureKeepsCaptureAndRescues(t *testing.T) {
 
 // TestRunBaselineFailureKeepsCaptureWithTimes is
 func TestRunBaselineFailureKeepsCaptureWithTimes(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	shortTicks(t)
 	code := captureExit(t)
@@ -246,6 +256,7 @@ func TestRunBaselineFailureKeepsCaptureWithTimes(t *testing.T) {
 }
 
 func TestRunLearnOnFailure(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	code := captureExit(t)
@@ -263,11 +274,13 @@ func TestRunLearnOnFailure(t *testing.T) {
 }
 
 func TestRunLearnOnFailureRequiresKey(t *testing.T) {
+	t.Serial()
 	_, _, err := execLpi(t, nil, "run", "--db", t.TempDir(), "--learn-on-failure", "--", "/bin/true")
 	require.ErrorContains(t, err, "--learn requires --key")
 }
 
 func TestRunFailureTooShortKeepsNothing(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	code := captureExit(t)
@@ -282,6 +295,7 @@ func TestRunFailureTooShortKeepsNothing(t *testing.T) {
 }
 
 func TestRunLearnTooShortDiscardsCapture(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	captureExit(t)
@@ -294,6 +308,7 @@ func TestRunLearnTooShortDiscardsCapture(t *testing.T) {
 
 // TestRunLearnSaveFailureKeepsCapture drives the
 func TestRunLearnSaveFailureKeepsCapture(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	shortTicks(t)
 	captureExit(t)
@@ -310,6 +325,7 @@ func TestRunLearnSaveFailureKeepsCapture(t *testing.T) {
 
 // TestRunCaptureDisabledWarning proves the recovery
 func TestRunCaptureDisabledWarning(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	require.NoError(t, os.WriteFile(filepath.Join(db, "pending"), []byte("blocker"), 0o644))
 	shortTicks(t)
@@ -326,6 +342,7 @@ func TestRunCaptureDisabledWarning(t *testing.T) {
 
 // TestRunTTYCaptureWarningOwnsItsLine forces the
 func TestRunTTYCaptureWarningOwnsItsLine(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	require.NoError(t, os.WriteFile(filepath.Join(db, "pending"), []byte("blocker"), 0o644))
 	shortTicks(t)
@@ -355,6 +372,7 @@ func TestRunTTYCaptureWarningOwnsItsLine(t *testing.T) {
 
 // TestCaptureFileAsRef proves capture files work
 func TestCaptureFileAsRef(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	captureExit(t)
@@ -394,6 +412,7 @@ func glueScriptStdout() string {
 
 // TestRunTTYStatusNeverGluesToChildOutput is the
 func TestRunTTYStatusNeverGluesToChildOutput(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	shortTicks(t)
 	captureExit(t)
@@ -416,6 +435,7 @@ func TestRunTTYStatusNeverGluesToChildOutput(t *testing.T) {
 
 // TestRunPlainStatusLinesAreWholeLines locks the
 func TestRunPlainStatusLinesAreWholeLines(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t) // PlainInterval = a status line per update
 	captureExit(t)
@@ -437,6 +457,7 @@ func TestRunPlainStatusLinesAreWholeLines(t *testing.T) {
 }
 
 func TestRunArgumentValidation(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 
 	_, _, err := execLpi(t, nil, "run", "--db", db, "--key", "demo", "/bin/true")

@@ -19,6 +19,7 @@ func setRoot(t *testing.T, args ...string) *bytes.Buffer {
 }
 
 func TestVersionFlag(t *testing.T) {
+	t.Serial()
 	out := setRoot(t, "--version")
 	require.NoError(t, rootCmd.Execute())
 	assert.Contains(t, out.String(), "dev")
@@ -33,6 +34,7 @@ func setOSArgs(t *testing.T, args ...string) {
 }
 
 func TestMainRunsHelp(t *testing.T) {
+	t.Serial()
 	setOSArgs(t, "--help")
 	out := setRoot(t, "--help")
 	main()
@@ -40,6 +42,7 @@ func TestMainRunsHelp(t *testing.T) {
 }
 
 func TestExecuteExitsNonzeroOnError(t *testing.T) {
+	t.Serial()
 	code := -1
 	osExit = func(c int) { code = c }
 	defer func() { osExit = os.Exit }()

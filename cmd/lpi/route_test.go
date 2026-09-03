@@ -7,6 +7,7 @@ import (
 )
 
 func TestRouteArgs(t *testing.T) {
+	t.Serial()
 	cases := []struct {
 		name string
 		in   []string

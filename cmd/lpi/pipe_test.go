@@ -18,6 +18,7 @@ import (
 )
 
 func TestPipePassthroughAndLearn(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	data, err := os.ReadFile(demoPartial)
 	require.NoError(t, err)
@@ -38,6 +39,7 @@ func TestPipePassthroughAndLearn(t *testing.T) {
 }
 
 func TestPipeWeirdBytesStayIntact(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	weird := "plain line\n\x00\x01binary\xff\r\nover\rwrite\nno trailing newline"
 	out, _, err := execLpi(t, strings.NewReader(weird), "pipe", "--db", db, "--key", "demo")
@@ -47,6 +49,7 @@ func TestPipeWeirdBytesStayIntact(t *testing.T) {
 
 // TestPipeTTYStatusNeverGluesToPassthrough covers
 func TestPipeTTYStatusNeverGluesToPassthrough(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	forceTTY(t, true)
 
@@ -60,6 +63,7 @@ func TestPipeTTYStatusNeverGluesToPassthrough(t *testing.T) {
 
 // TestPipePlainStatusLinesAreWholeLines locks the
 func TestPipePlainStatusLinesAreWholeLines(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t) // PlainInterval = a status line per update
 	forceTTY(t, false)
@@ -75,6 +79,7 @@ func TestPipePlainStatusLinesAreWholeLines(t *testing.T) {
 }
 
 func TestPipeJSONStream(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	data, err := os.ReadFile(demoPartial)
 	require.NoError(t, err)
@@ -92,6 +97,7 @@ func TestPipeJSONStream(t *testing.T) {
 }
 
 func TestPipeBootstrapsLearnKey(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	data, err := os.ReadFile(demoPartial)
 	require.NoError(t, err)
@@ -117,6 +123,7 @@ func TestPipeBootstrapsLearnKey(t *testing.T) {
 }
 
 func TestPipeBootstrapExplicitKeyMatchingLearnKey(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	_, errOut, err := execLpi(t, strings.NewReader("alpha line\nbeta line\n"), "pipe",
 		"--db", db, "--key", "fresh", "--learn-key", "fresh")
@@ -127,6 +134,7 @@ func TestPipeBootstrapExplicitKeyMatchingLearnKey(t *testing.T) {
 }
 
 func TestPipeBootstrapJSONStreamStaysFinite(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	_, errOut, err := execLpi(t, strings.NewReader("alpha line\nbeta line\n"), "pipe",
 		"--db", db, "--learn-key", "fresh", "--json-stream")
@@ -148,6 +156,7 @@ func TestPipeBootstrapJSONStreamStaysFinite(t *testing.T) {
 }
 
 func TestPipeMissingForeignKeyStillErrors(t *testing.T) {
+	t.Serial()
 	// A --key naming a different key than --learn-key
 	_, _, err := execLpi(t, strings.NewReader("x\n"), "pipe",
 		"--db", t.TempDir(), "--key", "other", "--learn-key", "fresh")
@@ -155,6 +164,7 @@ func TestPipeMissingForeignKeyStillErrors(t *testing.T) {
 }
 
 func TestPipeLearnTooShort(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	_, _, err := execLpi(t, strings.NewReader("only one line\n"), "pipe",
 		"--db", db, "--key", "demo", "--learn-key", "captured")
@@ -178,6 +188,7 @@ func (r *errAfterReader) Read(p []byte) (int, error) {
 }
 
 func TestPipeScannerErrorKeepsCapture(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	boom := errors.New("stdin exploded")
 	stdin := &errAfterReader{data: []byte("alpha line\nbeta line\n"), err: boom}
@@ -196,6 +207,7 @@ func TestPipeScannerErrorKeepsCapture(t *testing.T) {
 
 // TestPipeInterruptKeepsCaptureAndSkipsLearn covers
 func TestPipeInterruptKeepsCaptureAndSkipsLearn(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	code := captureExit(t)
 	forceTTY(t, true)
@@ -236,6 +248,7 @@ func TestPipeInterruptKeepsCaptureAndSkipsLearn(t *testing.T) {
 
 // TestPipeScannerErrorRecoveryOwnsLinesOnTTY drives
 func TestPipeScannerErrorRecoveryOwnsLinesOnTTY(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	forceTTY(t, true)
 
@@ -254,6 +267,7 @@ func TestPipeScannerErrorRecoveryOwnsLinesOnTTY(t *testing.T) {
 
 // TestPipeLearnSaveFailureKeepsCapture drives the
 func TestPipeLearnSaveFailureKeepsCapture(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	longKey := strings.Repeat("p", 246)
 	_, errOut, err := execLpi(t, strings.NewReader("alpha line\nbeta line\n"), "pipe",
@@ -265,6 +279,7 @@ func TestPipeLearnSaveFailureKeepsCapture(t *testing.T) {
 }
 
 func TestPipeRequiresReference(t *testing.T) {
+	t.Serial()
 	_, _, err := execLpi(t, strings.NewReader("x\n"), "pipe")
 	require.ErrorContains(t, err, "no reference given")
 }

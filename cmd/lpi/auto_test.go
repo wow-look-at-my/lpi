@@ -44,6 +44,7 @@ func autoModelKeys(t *testing.T, db string) []string {
 }
 
 func TestAutoRecordsNewPattern(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	shortTicks(t)
 	captureExit(t)
@@ -65,6 +66,7 @@ func TestAutoRecordsNewPattern(t *testing.T) {
 }
 
 func TestAutoSecondRunRecognizesAndRefines(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	shortTicks(t)
 	captureExit(t)
@@ -93,6 +95,7 @@ func TestAutoSecondRunRecognizesAndRefines(t *testing.T) {
 }
 
 func TestAutoCrossCommandFit(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	shortTicks(t)
 	captureExit(t)
@@ -116,6 +119,7 @@ func TestAutoCrossCommandFit(t *testing.T) {
 }
 
 func TestAutoNovelOutputRecordsSeparatePattern(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	shortTicks(t)
 	captureExit(t)
@@ -137,6 +141,7 @@ func TestAutoNovelOutputRecordsSeparatePattern(t *testing.T) {
 }
 
 func TestAutoShortRunMergesByContentHash(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	shortTicks(t)
 	captureExit(t)
@@ -155,6 +160,7 @@ func TestAutoShortRunMergesByContentHash(t *testing.T) {
 }
 
 func TestAutoFailureKeepsCapture(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	shortTicks(t)
 	code := captureExit(t)
@@ -174,6 +180,7 @@ func TestAutoFailureKeepsCapture(t *testing.T) {
 }
 
 func TestAutoLocksAndMergesUserKey(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	captureExit(t)
@@ -194,6 +201,7 @@ func TestAutoLocksAndMergesUserKey(t *testing.T) {
 }
 
 func TestAutoCleanShortRunIsNotAnError(t *testing.T) {
+	t.Serial()
 	// A clean child exit with nonempty lines has
 	tests := []struct {
 		name string
@@ -222,6 +230,7 @@ func TestAutoCleanShortRunIsNotAnError(t *testing.T) {
 }
 
 func TestAutoSkipsCorruptModels(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	shortTicks(t)
 	captureExit(t)
@@ -236,6 +245,7 @@ func TestAutoSkipsCorruptModels(t *testing.T) {
 }
 
 func TestAutoTransportErrorKeepsNothingWhenEmpty(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	shortTicks(t)
 	captureExit(t)
@@ -246,6 +256,7 @@ func TestAutoTransportErrorKeepsNothingWhenEmpty(t *testing.T) {
 }
 
 func TestAutoArgumentValidation(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 
 	_, _, err := execLpi(t, nil, "auto", "--db", db, "/bin/true")

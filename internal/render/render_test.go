@@ -38,6 +38,7 @@ func fullSnap() progress.Snapshot {
 }
 
 func TestBar(t *testing.T) {
+	t.Serial()
 	assert.Equal(t, "[>   ]", Bar(0, 4))
 	assert.Equal(t, "[>   ]", Bar(-0.5, 4))
 	assert.Equal(t, "[====]", Bar(1, 4))
@@ -49,6 +50,7 @@ func TestBar(t *testing.T) {
 }
 
 func TestDuration(t *testing.T) {
+	t.Serial()
 	assert.Equal(t, "0s", Duration(0))
 	assert.Equal(t, "0s", Duration(-5*time.Second))
 	assert.Equal(t, "47s", Duration(47*time.Second))
@@ -61,12 +63,14 @@ func TestDuration(t *testing.T) {
 }
 
 func TestStatusLineFull(t *testing.T) {
+	t.Serial()
 	want := "[========>             ] 38.4%  units 2451/5948 (41.2%)  " +
 		"elapsed 2m14s  eta ~3m35s  pace 1.07x  match 97%"
 	assert.Equal(t, want, StatusLine(fullSnap()))
 }
 
 func TestStatusLineOmissions(t *testing.T) {
+	t.Serial()
 	s := progress.Snapshot{
 		UnitsTotal: 5948,
 		ETAKind:    "none",
@@ -77,6 +81,7 @@ func TestStatusLineOmissions(t *testing.T) {
 }
 
 func TestStatusLineRefPace(t *testing.T) {
+	t.Serial()
 	s := progress.Snapshot{
 		Progress:   0.5,
 		UnitsDone:  45,
@@ -104,6 +109,7 @@ func baselineSnap() progress.Snapshot {
 }
 
 func TestStatusLineRecordingBaseline(t *testing.T) {
+	t.Serial()
 	s := baselineSnap()
 	assert.Equal(t, "recording baseline  lines 1234  elapsed 2m14s", StatusLine(s))
 
@@ -112,6 +118,7 @@ func TestStatusLineRecordingBaseline(t *testing.T) {
 }
 
 func TestStatusLineIdentifying(t *testing.T) {
+	t.Serial()
 	s := baselineSnap()
 	s.Identifying = true
 	assert.Equal(t, "identifying pattern  lines 1234  elapsed 2m14s", StatusLine(s))
@@ -121,6 +128,7 @@ func TestStatusLineIdentifying(t *testing.T) {
 }
 
 func TestStatusLineRefLabel(t *testing.T) {
+	t.Serial()
 	s := fullSnap()
 	s.Label = "make -j8"
 	want := "[========>             ] 38.4%  units 2451/5948 (41.2%)  " +
@@ -133,6 +141,7 @@ func TestStatusLineRefLabel(t *testing.T) {
 }
 
 func TestSummaryPatternLabel(t *testing.T) {
+	t.Serial()
 	s := fullSnap()
 	s.Label = "make -j8"
 	want := "Progress:    38.4% (time-weighted)\n" +
@@ -146,6 +155,7 @@ func TestSummaryPatternLabel(t *testing.T) {
 }
 
 func TestSummaryRecordingBaseline(t *testing.T) {
+	t.Serial()
 	s := baselineSnap()
 	want := "Reference:   none yet (recording baseline)\n" +
 		"Lines:       1234\n" +
@@ -160,6 +170,7 @@ func TestSummaryRecordingBaseline(t *testing.T) {
 }
 
 func TestSummaryFull(t *testing.T) {
+	t.Serial()
 	want := "Progress:    38.4% (time-weighted)\n" +
 		"Units:       2451 / 5948 reference lines matched (41.2%)\n" +
 		"Elapsed:     2m14s\n" +
@@ -170,6 +181,7 @@ func TestSummaryFull(t *testing.T) {
 }
 
 func TestSummaryRefPaceAndUnknownElapsed(t *testing.T) {
+	t.Serial()
 	s := fullSnap()
 	s.ElapsedKnown = false
 	s.ETAKind = "ref-pace"
@@ -185,6 +197,7 @@ func TestSummaryRefPaceAndUnknownElapsed(t *testing.T) {
 }
 
 func TestSummaryNoETANoTimes(t *testing.T) {
+	t.Serial()
 	s := progress.Snapshot{
 		Progress:   0.25,
 		UnitsDone:  20,
@@ -212,6 +225,7 @@ func forceTTY(t *testing.T, tty bool) {
 }
 
 func TestRendererTTYRepaintsInPlace(t *testing.T) {
+	t.Serial()
 	forceTTY(t, true)
 	var buf bytes.Buffer
 	r := New(&buf)
@@ -225,6 +239,7 @@ func TestRendererTTYRepaintsInPlace(t *testing.T) {
 }
 
 func TestRendererPlainThrottles(t *testing.T) {
+	t.Serial()
 	forceTTY(t, false)
 	old := PlainInterval
 	PlainInterval = time.Hour
@@ -244,6 +259,7 @@ func TestRendererPlainThrottles(t *testing.T) {
 }
 
 func TestRendererPlainIntervalElapsed(t *testing.T) {
+	t.Serial()
 	forceTTY(t, false)
 	old := PlainInterval
 	PlainInterval = 0 // every update qualifies
@@ -258,6 +274,7 @@ func TestRendererPlainIntervalElapsed(t *testing.T) {
 }
 
 func TestPassthroughTTYEraseAndRepaint(t *testing.T) {
+	t.Serial()
 	forceTTY(t, true)
 	var buf bytes.Buffer
 	r := New(&buf)
@@ -303,6 +320,7 @@ func TestPassthroughTTYEraseAndRepaint(t *testing.T) {
 }
 
 func TestPassthroughTTYCloseAfterPartialLine(t *testing.T) {
+	t.Serial()
 	forceTTY(t, true)
 	var buf bytes.Buffer
 	r := New(&buf)
@@ -320,6 +338,7 @@ func TestPassthroughTTYCloseAfterPartialLine(t *testing.T) {
 }
 
 func TestPassthroughPlainStatusOwnsWholeLines(t *testing.T) {
+	t.Serial()
 	forceTTY(t, false)
 	old := PlainInterval
 	PlainInterval = 0 // every update qualifies
@@ -353,6 +372,7 @@ func TestPassthroughPlainStatusOwnsWholeLines(t *testing.T) {
 }
 
 func TestMessageTTY(t *testing.T) {
+	t.Serial()
 	forceTTY(t, true)
 	var buf bytes.Buffer
 	r := New(&buf)
@@ -386,6 +406,7 @@ func TestMessageTTY(t *testing.T) {
 }
 
 func TestMessageTTYAfterPartialChildLine(t *testing.T) {
+	t.Serial()
 	forceTTY(t, true)
 	var buf bytes.Buffer
 	r := New(&buf)
@@ -403,6 +424,7 @@ func TestMessageTTYAfterPartialChildLine(t *testing.T) {
 }
 
 func TestMessagePlain(t *testing.T) {
+	t.Serial()
 	forceTTY(t, false)
 	old := PlainInterval
 	PlainInterval = 0 // every update qualifies
@@ -429,6 +451,7 @@ func TestMessagePlain(t *testing.T) {
 }
 
 func TestBreakTTY(t *testing.T) {
+	t.Serial()
 	forceTTY(t, true)
 	var buf bytes.Buffer
 	r := New(&buf)
@@ -462,6 +485,7 @@ func TestBreakTTY(t *testing.T) {
 }
 
 func TestBreakPlain(t *testing.T) {
+	t.Serial()
 	forceTTY(t, false)
 	old := PlainInterval
 	PlainInterval = 0
@@ -487,6 +511,7 @@ func TestBreakPlain(t *testing.T) {
 }
 
 func TestPassthroughSeparateTTYStreams(t *testing.T) {
+	t.Serial()
 	forceTTY(t, true) // both the status stream and dst count as TTYs
 	var status, out bytes.Buffer
 	r := New(&status)
@@ -508,6 +533,7 @@ func TestPassthroughSeparateTTYStreams(t *testing.T) {
 }
 
 func TestPassthroughUncoordinatedIsUnwrapped(t *testing.T) {
+	t.Serial()
 	forceTTY(t, false)
 	var status, out bytes.Buffer
 	r := New(&status)
@@ -523,6 +549,7 @@ type funcWriter func([]byte) (int, error)
 func (f funcWriter) Write(p []byte) (int, error) { return f(p) }
 
 func TestPassthroughUncomparableWriter(t *testing.T) {
+	t.Serial()
 	forceTTY(t, false)
 	w := funcWriter(func(p []byte) (int, error) { return len(p), nil })
 	r := New(w)
@@ -530,6 +557,7 @@ func TestPassthroughUncomparableWriter(t *testing.T) {
 }
 
 func TestIsTTYDefault(t *testing.T) {
+	t.Serial()
 	assert.False(t, IsTTY(&bytes.Buffer{}))
 
 	f, err := os.CreateTemp(t.TempDir(), "plain")

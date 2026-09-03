@@ -12,6 +12,7 @@ import (
 )
 
 func TestLearnThenModelLifecycle(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 
 	out, _, err := execLpi(t, nil, "learn", "--db", db, "--key", "demo", demoBuild1, demoBuild2)
@@ -73,6 +74,7 @@ const captureContent = "#lpi-capture v1\trescued run\n" +
 	"3000000000\tgamma done\n"
 
 func TestLearnRemovesPendingCaptures(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	require.NoError(t, os.MkdirAll(model.PendingDir(db), 0o755))
 	inside := filepath.Join(model.PendingDir(db), "demo-20260709-120000-1.log")
@@ -98,6 +100,7 @@ func TestLearnRemovesPendingCaptures(t *testing.T) {
 }
 
 func TestLearnFailureKeepsPendingCaptures(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	require.NoError(t, os.MkdirAll(model.PendingDir(db), 0o755))
 	inside := filepath.Join(model.PendingDir(db), "demo-20260709-120000-2.log")
@@ -110,6 +113,7 @@ func TestLearnFailureKeepsPendingCaptures(t *testing.T) {
 }
 
 func TestLearnErrors(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 
 	_, _, err := execLpi(t, nil, "learn", "--db", db, demoBuild1)
@@ -123,6 +127,7 @@ func TestLearnErrors(t *testing.T) {
 }
 
 func TestModelShowNoTimestamps(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	log := t.TempDir() + "/plain.log"
 	require.NoError(t, os.WriteFile(log, []byte("alpha step\nbeta step\ngamma step\n"), 0o644))
@@ -142,6 +147,7 @@ func TestModelShowNoTimestamps(t *testing.T) {
 }
 
 func TestModelErrors(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 
 	_, _, err := execLpi(t, nil, "model", "show", "--db", db, "ghost")
