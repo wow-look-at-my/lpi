@@ -11,8 +11,7 @@ import (
 
 func setRoot(t *testing.T, args ...string) *bytes.Buffer {
 	t.Helper()
-	// Flag values persist across in-process executions: a run that set
-	// --help makes every later run print help instead of its own output.
+	// A leftover --help makes later runs print help
 	resetCommand(rootCmd)
 	var out bytes.Buffer
 	rootCmd.SetOut(&out)

@@ -41,7 +41,8 @@ internal/
                 autofit.go: the Chooser that fits live output against every
                 stored model (auto mode's lock/switch/merge decisions)
   tailer/       polling file follower (truncation, rotation, appears-late)
-  render/       Bar/StatusLine/Summary strings + TTY-aware Renderer;
+  render/       Bar/StatusLine/Summary strings (render.go, render_test.go)
+                + TTY-aware Renderer (renderer_test.go);
                 Passthrough coordinates child output with the status line
                 (the two never share a terminal line); Message gives lpi's
                 own out-of-band lines the same discipline and Break ends an
@@ -134,6 +135,10 @@ testdata/demo/         two complete fake cmake builds + a ~55% partial run,
 - `tailer.Tailer.Interval` -- poll interval (also the `--interval` flag)
 - `cmd/lpi`: `osExit` (exit-code capture), `tickInterval` (live tick),
   `newSignalContext` (watch cancellation)
+- The toolchain's Go runs tests parallel by default; every cmd/lpi and
+  render test calls `t.Serial()` because they share process-wide state
+  (`rootCmd`, `render.IsTTY`, `render.PlainInterval`, `os.Args`). A new
+  test in either package needs that call too.
 - cmd tests execute `rootCmd` in-process; `resetCommand` in helpers_test.go
   restores flag defaults AND re-inits pflag's sticky `--` position between
   executions (pflag never resets `argsLenAtDash` on Parse). `execLpi`
