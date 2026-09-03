@@ -9,7 +9,7 @@ import (
 // routeArgs implements the magic default mode: a first argument that is
 // neither a flag nor a registered subcommand is treated as a command to run
 // under 'auto', with '--' inserted so the wrapped command's own flags
-// (lpi make -j8) are never parsed as lpi flags. "lpi -- CMD" is the
+// (lpi make are never parsed as lpi flags. "lpi -- CMD" is the
 // explicit escape for wrapped commands whose name collides with an lpi
 // subcommand.
 func routeArgs(args []string) []string {
@@ -30,7 +30,7 @@ func routeArgs(args []string) []string {
 }
 
 // isSubcommandName reports whether name is a registered subcommand or alias
-// on the root command, or one of cobra's implicit commands (help,
+// on the root command, or of cobra's implicit commands (help,
 // completion, and the hidden shell-completion entry points), which are not
 // registered until Execute runs.
 func isSubcommandName(name string) bool {

@@ -24,7 +24,7 @@ func steps(n int) []string {
 	return lines
 }
 
-// uniform returns offsets 0, gap, 2*gap, ... for n lines.
+// uniform returns offsets gap, ... for n lines.
 func uniform(n int, gap time.Duration) []time.Duration {
 	offs := make([]time.Duration, n)
 	for i := range offs {
@@ -146,7 +146,7 @@ func TestNovelAndOverflowCounting(t *testing.T) {
 
 	e.Observe("totally unknown zebra", time.Time{})
 	e.Observe("alpha line", time.Time{})
-	e.Observe("alpha line", time.Time{}) // reference has only one occurrence
+	e.Observe("alpha line", time.Time{}) // reference has only occurrence
 	e.Observe("", time.Time{})           // skipped entirely
 	e.Observe("   ", time.Time{})        // skipped entirely
 

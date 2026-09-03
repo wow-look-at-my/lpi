@@ -15,7 +15,7 @@ import (
 	"github.com/wow-look-at-my/log-progress-indicator/internal/timeparse"
 )
 
-// Occurrence is one expected appearance of a fingerprint within a run.
+// Occurrence is expected appearance of a fingerprint within a run.
 type Occurrence struct {
 	// TimeFrac is the completion time of this occurrence as a fraction of
 	// the run duration (line-index fraction when the run has no times).
@@ -25,24 +25,24 @@ type Occurrence struct {
 	WeightFrac float32
 }
 
-// Run is the digest of one completed reference run.
+// Run is the digest of completed reference run.
 type Run struct {
 	Source   string
 	Lines    int           // nonempty lines digested
-	Duration time.Duration // 0 if unknown
+	Duration time.Duration // if unknown
 	HasTimes bool
 	Occ      map[uint64][]Occurrence
 }
 
-// rawOcc is one line observation prior to fraction conversion.
+// rawOcc is line observation prior to fraction conversion.
 type rawOcc struct {
-	idx   int           // 0-based nonempty line index
+	idx   int           // nonempty line index
 	at    time.Time     // effective (monotonic) time; valid when timed
 	gap   time.Duration // time since the previous line
 	timed bool          // false only before the first timestamp of the run
 }
 
-// Digester incrementally consumes one run's log lines. Feed lines with Line
+// Digester incrementally consumes run's log lines. Feed lines with Line
 // (timestamps parsed via the format, if any) or LineAt (explicit times, for
 // live-recorded runs), then call Finish.
 type Digester struct {
@@ -55,14 +55,14 @@ type Digester struct {
 	haveT  bool
 }
 
-// NewDigester returns a Digester for one run. A nil format means position
+// NewDigester returns a Digester for run. A nil format means position
 // mode: line indices stand in for times unless LineAt supplies them.
 func NewDigester(source string, format *timeparse.Format) *Digester {
 	return &Digester{source: source, format: format, occ: make(map[uint64][]rawOcc)}
 }
 
-// Line feeds one raw log line, parsing its timestamp with the configured
-// format when one was given.
+// Line feeds raw log line, parsing its timestamp with the configured
+// format when was given.
 func (d *Digester) Line(text string) {
 	var at time.Time
 	if d.format != nil {
@@ -73,7 +73,7 @@ func (d *Digester) Line(text string) {
 	d.add(text, at)
 }
 
-// LineAt feeds one raw log line stamped with an explicit time (zero if
+// LineAt feeds raw log line stamped with an explicit time if
 // unknown).
 func (d *Digester) LineAt(text string, at time.Time) {
 	d.add(text, at)
@@ -113,7 +113,7 @@ func (d *Digester) add(text string, at time.Time) {
 }
 
 // Finish converts the accumulated observations into a Run. It fails when
-// fewer than 2 nonempty lines were digested.
+// fewer than nonempty lines were digested.
 func (d *Digester) Finish() (*Run, error) {
 	if d.count < 2 {
 		return nil, errors.New("model: need at least 2 nonempty log lines")
@@ -126,7 +126,7 @@ func (d *Digester) Finish() (*Run, error) {
 	if dur > 0 {
 		d.finishTimed(run, dur)
 	} else {
-		// No usable times (none given, none parsed, or zero span): position
+		// No usable times (none given, none parsed, or span): position
 		// mode, where line indices stand in for times.
 		d.finishPositional(run)
 	}
@@ -146,7 +146,7 @@ func (d *Digester) finishTimed(run *Run, dur time.Duration) {
 					WeightFrac: float32(float64(ro.gap) / fdur),
 				}
 			}
-			// !ro.timed: before the first timestamp -> TimeFrac 0, weight 0.
+			// !ro.timed: before the first timestamp -> TimeFrac weight
 		}
 		run.Occ[fp] = occs
 	}
@@ -186,7 +186,7 @@ const detectLines = 300
 // DigestFile digests a log file into a Run. Gzip files are handled
 // transparently (sniffed via magic bytes), as are lpi capture files (sniffed
 // via their header line), whose records carry the exact per-line times of
-// the recorded run. For plain logs the first 300 lines are sampled for
+// the recorded run. For plain logs the first lines are sampled for
 // timeparse.Detect, then the whole file is digested.
 func DigestFile(path string) (*Run, error) {
 	f, err := os.Open(path)

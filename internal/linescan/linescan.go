@@ -9,11 +9,11 @@ import (
 )
 
 // MaxLine is the maximum length of a returned line in bytes.
-const MaxLine = 1 << 20 // 1 MiB
+const MaxLine = 1 << 20 // MiB
 
 const bufSize = 64 * 1024
 
-// Scanner yields lines from a reader: it splits on '\n', strips one trailing
+// Scanner yields lines from a reader: it splits on '\n', strips trailing
 // '\r', and caps lines at MaxLine bytes. A final unterminated line is still
 // yielded. It is implemented as a bufio.Reader ReadSlice loop.
 type Scanner struct {

@@ -17,7 +17,7 @@ import (
 )
 
 // captureExit stubs the osExit seam and returns a pointer to the recorded
-// code (-1 when never called).
+// code when never called).
 func captureExit(t *testing.T) *int {
 	t.Helper()
 	code := -1
@@ -125,7 +125,7 @@ func TestRunBootstrapsMissingKeyWithLearn(t *testing.T) {
 	captureExit(t)
 	script := "sed -n 1,40p " + demoPartial
 
-	// First invocation: no model yet -> baseline recording, learned on exit 0.
+	// First invocation: no model yet -> baseline recording, learned on exit
 	_, errOut, err := execLpi(t, nil, "run", "--db", db, "--key", "fresh", "--learn", "--",
 		"/bin/sh", "-c", script)
 	require.NoError(t, err)
@@ -321,7 +321,7 @@ func TestRunLearnSaveFailureKeepsCapture(t *testing.T) {
 
 // TestRunCaptureDisabledWarning proves the recovery feature never breaks
 // the primary flow: when the capture file cannot be created, the run warns
-// once and proceeds normally.
+// and proceeds normally.
 func TestRunCaptureDisabledWarning(t *testing.T) {
 	db := seedDemoModel(t)
 	require.NoError(t, os.WriteFile(filepath.Join(db, "pending"), []byte("blocker"), 0o644))
@@ -340,7 +340,7 @@ func TestRunCaptureDisabledWarning(t *testing.T) {
 // TestRunTTYCaptureWarningOwnsItsLine forces the capture warning (pending/
 // is a regular file, so the capture file cannot be created) on a TTY run
 // with live rendering: the warning must own a whole terminal line from
-// column 0 -- never glued onto a status paint or a child line -- and the
+// column -- never glued onto a status paint or a child line -- and the
 // status discipline must hold around it.
 func TestRunTTYCaptureWarningOwnsItsLine(t *testing.T) {
 	db := seedDemoModel(t)
@@ -414,8 +414,8 @@ func glueScriptStdout() string {
 
 // TestRunTTYStatusNeverGluesToChildOutput is the reported bug: on a TTY the
 // status line was painted with no trailing newline and passthrough bytes
-// were appended straight onto it ("recording baseline  lines 35  elapsed
-// 3sLocal build detected..."). The renderer must erase before child bytes,
+// were appended straight onto it ("recording baseline lines elapsed
+// build detected..."). The renderer must erase before child bytes,
 // repaint after them, and never paint onto a partial child line.
 func TestRunTTYStatusNeverGluesToChildOutput(t *testing.T) {
 	db := t.TempDir()
@@ -439,10 +439,10 @@ func TestRunTTYStatusNeverGluesToChildOutput(t *testing.T) {
 }
 
 // TestRunPlainStatusLinesAreWholeLines locks the plain-mode discipline:
-// every status print is a complete line, and child output never shares one.
+// every status print is a complete line, and child output never shares
 func TestRunPlainStatusLinesAreWholeLines(t *testing.T) {
 	db := seedDemoModel(t)
-	shortTicks(t) // PlainInterval = 0: a status line per update
+	shortTicks(t) // PlainInterval = a status line per update
 	captureExit(t)
 	forceTTY(t, false)
 

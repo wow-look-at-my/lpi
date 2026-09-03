@@ -291,12 +291,12 @@ func TestPassthroughTTYEraseAndRepaint(t *testing.T) {
 	assert.Equal(t, "\r\x1b[K"+"part", buf.String())
 	buf.Reset()
 
-	// The next paint starts on a fresh line instead of the partial one.
+	// The next paint starts on a fresh line instead of the partial
 	r.Update(s)
 	assert.Equal(t, "\n"+"\r\x1b[K"+line, buf.String())
 	buf.Reset()
 
-	// The child line's remainder lands at column 0 of an erased line.
+	// The child line's remainder lands at column of an erased line.
 	_, err = pt.Write([]byte("rest\n"))
 	require.NoError(t, err)
 	assert.Equal(t, "\r\x1b[K"+"rest\n"+"\r\x1b[K"+line, buf.String())
@@ -402,7 +402,7 @@ func TestMessageTTYAfterPartialChildLine(t *testing.T) {
 	require.NoError(t, err)
 	buf.Reset()
 
-	// The partial child line is terminated before the message: the two
+	// The partial child line is terminated before the message: the
 	// never share a terminal line.
 	r.Message("interrupted -- run not learned")
 	assert.Equal(t, "\n"+"interrupted -- run not learned\n", buf.String())
@@ -479,7 +479,7 @@ func TestBreakPlain(t *testing.T) {
 	pt := r.Passthrough(&buf, &sync.Mutex{})
 	s := fullSnap()
 
-	// Plain statuses already own whole lines: Break after one is a no-op.
+	// Plain statuses already own whole lines: Break after is a no-op.
 	r.Update(s)
 	buf.Reset()
 	r.Break()

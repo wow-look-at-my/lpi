@@ -66,7 +66,7 @@ func TestPipeTTYStatusNeverGluesToPassthrough(t *testing.T) {
 // pipe: complete status lines only, no escape sequences.
 func TestPipePlainStatusLinesAreWholeLines(t *testing.T) {
 	db := seedDemoModel(t)
-	shortTicks(t) // PlainInterval = 0: a status line per update
+	shortTicks(t) // PlainInterval = a status line per update
 	forceTTY(t, false)
 
 	input := "alpha compile line\nbeta compile line\n"
@@ -202,7 +202,7 @@ func TestPipeScannerErrorKeepsCapture(t *testing.T) {
 // TestPipeInterruptKeepsCaptureAndSkipsLearn covers the Ctrl-C race: the
 // same signal that kills the upstream would EOF stdin and trigger the
 // unconditional EOF-learn of a truncated stream. The handler must win: keep
-// the capture, report, and exit 130 without learning. It runs on a forced
+// the capture, report, and exit without learning. It runs on a forced
 // TTY, so it also proves the interrupt notice and recovery lines fire
 // through the renderer mid-render: the painted status is erased and each
 // message owns a whole terminal line instead of gluing onto the status.
@@ -239,8 +239,8 @@ func TestPipeInterruptKeepsCaptureAndSkipsLearn(t *testing.T) {
 	_, err = model.Load(model.PathForKey(db, "captured"))
 	assert.True(t, os.IsNotExist(err), "a truncated stream must never be learned")
 
-	// The terminal scrollback is exactly the three messages: the transient
-	// status was erased before the notice, and no line mixes the two.
+	// The terminal scrollback is exactly the messages: the transient
+	// status was erased before the notice, and no line mixes the
 	assert.Equal(t, []string{
 		"interrupted -- run not learned",
 		"captured log kept: " + files[0],

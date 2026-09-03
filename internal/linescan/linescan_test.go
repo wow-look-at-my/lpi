@@ -29,7 +29,7 @@ func TestScanCRLF(t *testing.T) {
 }
 
 func TestScanInteriorCRPreserved(t *testing.T) {
-	// Only one trailing '\r' is stripped; interior ones (progress bars) stay.
+	// Only trailing '\r' is stripped; interior ones (progress bars) stay.
 	assert.Equal(t, []string{"a\rb", "x\r"}, collect(t, "a\rb\nx\r\r\n"))
 }
 

@@ -63,7 +63,7 @@ func execLpi(t *testing.T, stdin io.Reader, args ...string) (string, string, err
 	return out.String(), errOut.String(), err
 }
 
-// seedDemoModel learns the two demo builds into a fresh database directory
+// seedDemoModel learns the demo builds into a fresh database directory
 // under key "demo" and returns the directory.
 func seedDemoModel(t *testing.T) string {
 	t.Helper()
@@ -103,7 +103,7 @@ func pendingFiles(t *testing.T, db string) []string {
 	return paths
 }
 
-// parseJSONLine unmarshals one JSON object into a generic map.
+// parseJSONLine unmarshals JSON object into a generic map.
 func parseJSONLine(t *testing.T, line string) map[string]any {
 	t.Helper()
 	var m map[string]any
@@ -120,7 +120,7 @@ func forceTTY(t *testing.T, tty bool) {
 }
 
 // renderScrollback replays raw terminal bytes -- '\n' commits a line, '\r'
-// returns to column 0, and ESC[K erases from the cursor to end of line --
+// returns to column and ESC[K erases from the cursor to end of line --
 // and returns each line as it looked when committed, plus the final
 // uncommitted line if any. It reproduces what a terminal's scrollback would
 // have shown for the stream.
@@ -167,8 +167,8 @@ var (
 )
 
 // assertStatusOwnsLines fails when any rendered terminal line mixes status
-// text with child output (e.g. "...elapsed 3sLocal build detected..."). It
-// also requires at least one intact status line, so the check cannot pass
+// text with child output (e.g. "...elapsed build detected..."). It
+// also requires at least intact status line, so the check cannot pass
 // vacuously on output that rendered no status at all.
 func assertStatusOwnsLines(t *testing.T, lines []string) {
 	t.Helper()

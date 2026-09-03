@@ -6,7 +6,7 @@ import (
 	"github.com/wow-look-at-my/log-progress-indicator/internal/model"
 )
 
-// Candidate is one stored pattern offered to the Chooser.
+// Candidate is stored pattern offered to the Chooser.
 type Candidate struct {
 	Key   string
 	Label string // DisplayLabel of the model, for status surfacing
@@ -14,17 +14,17 @@ type Candidate struct {
 }
 
 // Fit decision thresholds. Locking is a display decision: because every
-// candidate estimator consumes the stream from line 1, locking late or
+// candidate estimator consumes the stream from line locking late or
 // re-locking costs nothing, so the bars are tuned for responsiveness. An
 // obvious match (earlyLockRate) locks as soon as lockMinLines rules out
 // coincidence; anything holding lockRate by lockWindowLines locks then,
 // and the check keeps running after the window so a preamble-heavy log
 // still locks the moment a candidate's cumulative rate recovers.
-// switchMargin is hysteresis: without it two sibling patterns with heavy
+// switchMargin is hysteresis: without it sibling patterns with heavy
 // overlap would flap the lock (and the label) line by line. mergeRate
 // gates the LEARN decision and is deliberately higher than lockRate --
 // display can afford to be provisionally wrong, merging a run into the
-// wrong pattern cannot; 0.6 aligns with the "medium" confidence boundary.
+// wrong pattern cannot; aligns with the "medium" confidence boundary.
 const (
 	lockMinLines    = 12   // never lock before this many counted lines
 	earlyLockRate   = 0.80 // rate that locks as soon as lockMinLines is reached
@@ -34,10 +34,10 @@ const (
 	mergeRate       = 0.60 // minimum final rate to merge the run into the locked pattern
 )
 
-// Chooser feeds every observed line to one Estimator per candidate and
+// Chooser feeds every observed line to Estimator per candidate and
 // decides which stored pattern the live output belongs to. Because
 // matching is order-free and every candidate consumes the stream from
-// line 1, locking late or switching costs nothing: the winner's estimator
+// line locking late or switching costs nothing: the winner's estimator
 // state is already exact. A "null" estimator over an empty model is fed
 // alongside the candidates; it supplies the line counts, elapsed time,
 // and confidence-"none" snapshots for the pre-lock and no-candidate
@@ -46,10 +46,10 @@ type Chooser struct {
 	cands  []Candidate
 	ests   []*Estimator
 	null   *Estimator
-	locked int // index into cands; -1 while unlocked
+	locked int // index into cands; while unlocked
 }
 
-// NewChooser returns a Chooser over the given stored patterns. Zero
+// NewChooser returns a Chooser over the given stored patterns.
 // candidates is valid: the Chooser then behaves exactly like an Estimator
 // over an empty model (the baseline-recording state).
 func NewChooser(cands []Candidate) *Chooser {
@@ -61,7 +61,7 @@ func NewChooser(cands []Candidate) *Chooser {
 	return c
 }
 
-// Observe feeds one live line to every estimator, then re-evaluates the
+// Observe feeds live line to every estimator, then re-evaluates the
 // lock (cheap: candidate counts are small). Line counting, normalization,
 // and empty-line skipping are delegated entirely to the estimators.
 func (c *Chooser) Observe(line string, at time.Time) {
@@ -173,7 +173,7 @@ func (c *Chooser) Best() (key string, rate float64, ok bool) {
 	return c.cands[i].Key, c.rate(i), true
 }
 
-// FinalRate returns key's cumulative match rate (0 for an unknown key).
+// FinalRate returns key's cumulative match rate for an unknown key).
 func (c *Chooser) FinalRate(key string) float64 {
 	for i, cand := range c.cands {
 		if cand.Key == key {
@@ -186,7 +186,7 @@ func (c *Chooser) FinalRate(key string) float64 {
 // MergeTarget returns the pattern a finished run should be merged into:
 // the locked candidate, provided its final cumulative match rate clears
 // mergeRate. Below that bar ok is false and the caller records a new
-// pattern instead of risking the stored one.
+// pattern instead of risking the stored
 func (c *Chooser) MergeTarget() (key, label string, ok bool) {
 	if c.locked < 0 || c.rate(c.locked) < mergeRate {
 		return "", "", false

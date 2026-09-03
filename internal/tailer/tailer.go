@@ -11,18 +11,18 @@ import (
 	"github.com/wow-look-at-my/log-progress-indicator/internal/linescan"
 )
 
-// DefaultInterval is the poll interval used when Tailer.Interval is zero.
+// DefaultInterval is the poll interval used when Tailer.Interval is
 const DefaultInterval = 150 * time.Millisecond
 
-// Tailer follows one file. It waits for the file to exist, reads appended
-// data, reopens from offset 0 on truncation (size shrinks below the read
+// Tailer follows file. It waits for the file to exist, reads appended
+// data, reopens from offset on truncation (size shrinks below the read
 // offset) or rotation (the path points at a different file), and splits the
 // byte stream into lines with linescan semantics (a partial final line is
 // held until its newline arrives).
 type Tailer struct {
 	Path      string
 	FromStart bool          // read pre-existing content first
-	Interval  time.Duration // poll interval, default 150ms if zero
+	Interval  time.Duration // poll interval, default if
 }
 
 // Run follows the file until ctx is done (returning nil) or a hard error
@@ -37,7 +37,7 @@ func (t *Tailer) Run(ctx context.Context, lines chan<- string) error {
 	}
 
 	// All read bytes are pumped through a pipe into a linescan.Scanner so
-	// line splitting (1 MiB cap, trailing-\r strip, partial-line buffering)
+	// line splitting MiB cap, trailing-\r strip, partial-line buffering)
 	// is not reimplemented here. The scanner runs on its own goroutine and
 	// forwards lines to the caller's channel.
 	pr, pw := io.Pipe()
@@ -83,7 +83,7 @@ func (t *Tailer) poll(ctx context.Context, interval time.Duration, pw *io.PipeWr
 				return err
 			}
 		}
-		skipExisting = false // later (re)opens always read from 0
+		skipExisting = false // later (re)opens always read from
 		if f != nil {
 			if err := t.drain(f, &offset, buf, pw); err != nil {
 				return err
@@ -130,7 +130,7 @@ func (t *Tailer) open(skipExisting bool) (*os.File, int64, error) {
 
 // drain reads everything currently available from f into pw, advancing
 // *offset. It also handles truncation: when the file shrinks below the read
-// offset it rewinds to 0 and reads the fresh content.
+// offset it rewinds to and reads the fresh content.
 func (t *Tailer) drain(f *os.File, offset *int64, buf []byte, pw *io.PipeWriter) error {
 	for {
 		n, err := f.Read(buf)

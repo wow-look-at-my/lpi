@@ -92,7 +92,7 @@ from exit code 0.`,
 		// has already been forwarded, so passthrough stays byte-faithful
 		// even for overlong or binary lines. The renderer's Passthrough
 		// keeps the status line off the forwarded bytes' terminal lines
-		// when the two streams share a terminal.
+		// when the streams share a terminal.
 		out := cmd.OutOrStdout()
 		if r != nil {
 			out = r.Passthrough(out, &st.mu)
@@ -161,7 +161,7 @@ from exit code 0.`,
 		}
 		run, err := dig.Finish()
 		if err != nil {
-			// The only Finish failure is <2 nonempty lines: nothing recoverable.
+			// The only Finish failure is nonempty lines: nothing recoverable.
 			capture.Discard()
 			return fmt.Errorf("run not learned: %w", err)
 		}
@@ -175,7 +175,7 @@ from exit code 0.`,
 }
 
 // pipeLearnState coordinates the scan loop, the EOF learning path, and the
-// interrupt handler of one learning pipe invocation.
+// interrupt handler of learning pipe invocation.
 type pipeLearnState struct {
 	mu          sync.Mutex
 	interrupted bool
@@ -186,7 +186,7 @@ type pipeLearnState struct {
 // Without it, the upstream process dying from the same Ctrl-C would EOF
 // stdin and the unconditional EOF-learn would merge a truncated stream into
 // the model. On a signal the handler keeps the capture file (already
-// durable on disk), reports, and exits 128+N immediately; a signal arriving
+// durable on disk), reports, and exits immediately; a signal arriving
 // after the stream completed is ignored. Reporting goes through msg under
 // st.mu -- the mutex the renderer is serialized by -- so the notice never
 // gets glued onto a painted status line. The returned stop func disarms the
@@ -216,7 +216,7 @@ func (st *pipeLearnState) armInterrupt(msg notify, dig *model.Digester, capture 
 	}
 }
 
-// signalNumber maps a caught signal to its number for the 128+N convention.
+// signalNumber maps a caught signal to its number for the convention.
 func signalNumber(s os.Signal) int {
 	if sig, ok := s.(syscall.Signal); ok {
 		return int(sig)

@@ -1,7 +1,7 @@
 // Package render turns progress snapshots into terminal output: an in-place
 // status line on TTYs, throttled plain lines otherwise, and a multi-line
 // summary block. Passthrough coordinates child output with the status line
-// so the two never share a terminal line; Message and Break extend the same
+// so the never share a terminal line; Message and Break extend the same
 // discipline to the caller's own out-of-band lines and to abandoned renders.
 package render
 
@@ -18,7 +18,7 @@ import (
 )
 
 // PlainInterval is the minimum time between non-TTY status lines (a whole
-// percent of progress also forces one). It is a var so tests can shorten it.
+// percent of progress also forces It is a var so tests can shorten it.
 var PlainInterval = 2 * time.Second
 
 // IsTTY reports whether w is an interactive terminal. It is a var so tests
@@ -35,7 +35,7 @@ var IsTTY = func(w io.Writer) bool {
 // barWidth is the interior width of the status-line progress bar.
 const barWidth = 22
 
-// Renderer writes live status lines to one writer. It is not safe for
+// Renderer writes live status lines to writer. It is not safe for
 // concurrent use; callers serialize Update/Close/Message/Break (and writes
 // through Passthrough share the same mutex).
 type Renderer struct {
@@ -54,7 +54,7 @@ func New(w io.Writer) *Renderer {
 	return &Renderer{w: w, tty: IsTTY(w), lastPct: -1}
 }
 
-// Update renders one live snapshot. On a TTY the status line is repainted in
+// Update renders live snapshot. On a TTY the status line is repainted in
 // place; otherwise a line is printed for the first update, then at most every
 // PlainInterval or when the whole progress percent changes.
 func (r *Renderer) Update(s progress.Snapshot) {
@@ -85,7 +85,7 @@ func (r *Renderer) Close(final progress.Snapshot) {
 	r.printPlain(StatusLine(final))
 }
 
-// Message writes one of the caller's own out-of-band lines (a warning, an
+// Message writes of the caller's own out-of-band lines (a warning, an
 // interrupt notice, recovery instructions) with the same never-share-a-line
 // discipline as the status: a painted TTY status is erased first, a partial
 // child passthrough line is terminated, and the message ends with a newline.
@@ -133,7 +133,7 @@ func (r *Renderer) paint(line string) {
 	r.painted = true
 }
 
-// printPlain writes one complete status line in plain mode. A status print
+// printPlain writes complete status line in plain mode. A status print
 // always owns a whole line: it ends with a newline, and a partial child line
 // pending on the same stream is terminated first.
 func (r *Renderer) printPlain(line string) {
@@ -148,7 +148,7 @@ func (r *Renderer) printPlain(line string) {
 // shares a terminal line with the status line: a pending TTY status is
 // erased before the child's bytes and repainted after them, and bytes ending
 // mid-line mark the display so the next status starts on a fresh line
-// instead of the child's partial one. The child's bytes themselves reach dst
+// instead of the child's partial The child's bytes themselves reach dst
 // untouched. Writes lock mu -- the same mutex the caller uses to serialize
 // Update/Close -- so passthrough and rendering never interleave. dst is
 // returned unwrapped (and stays lock-free) when its output cannot collide
@@ -199,8 +199,8 @@ func (pw *passthroughWriter) Write(p []byte) (int, error) {
 	return n, err
 }
 
-// Bar renders a "[=====>    ]" progress bar with the given interior width.
-// frac is clamped to 0..1.
+// Bar renders a "[=====> ]" progress bar with the given interior width.
+// frac is clamped to
 func Bar(frac float64, width int) string {
 	if width <= 0 {
 		return "[]"
@@ -224,22 +224,22 @@ const statusLabelMax = 28
 
 // StatusLine renders a single-line live status, e.g.
 //
-//	[========>             ] 38.4%  units 2451/5948 (41.2%)  elapsed 2m14s  eta ~3m35s  pace 1.07x  match 97%
+//	[========> ] units elapsed eta pace match
 //
 // The elapsed segment is omitted when elapsed time is unknown, the eta
-// segment when there is no ETA, and the pace segment when pace is 0. A
+// segment when there is no ETA, and the pace segment when pace is A
 // snapshot from a locked pattern chooser (Label set) gains a trailing
 // "ref <label>" segment, the label truncated to statusLabelMax bytes.
 // While the chooser is still deciding (Identifying set) there is nothing
 // to draw a bar against yet, so an identifying status is shown, e.g.
 //
-//	identifying pattern  lines 42  elapsed 3s
+//	identifying pattern lines elapsed
 //
-// Against an empty reference model (units total 0: a live-learning run
+// Against an empty reference model (units total a live-learning run
 // recording the first baseline) the bar would be meaningless, so a
 // recording status is shown instead, e.g.
 //
-//	recording baseline  lines 1234  elapsed 2m14s
+//	recording baseline lines elapsed
 //
 // in both cases with the elapsed segment omitted when unknown.
 func StatusLine(s progress.Snapshot) string {
@@ -340,8 +340,8 @@ func progressBasis(s progress.Snapshot) string {
 	return "by line position"
 }
 
-// Duration formats d rounded to seconds: sub-minute as "47s", sub-hour as
-// "12m34s", and longer as "1h02m".
+// Duration formats d rounded to seconds: sub-minute as sub-hour as
+// and longer as
 func Duration(d time.Duration) string {
 	if d < 0 {
 		d = 0

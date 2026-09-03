@@ -48,8 +48,8 @@ func addRefFlags(cmd *cobra.Command, rf *refFlags) {
 }
 
 // resolve builds the reference model: --key loads it from the database, and
-// each --ref log is digested and added on top (in memory only). At least one
-// of the two must be given.
+// each --ref log is digested and added on top (in memory only). At least
+// of the must be given.
 func (rf *refFlags) resolve() (*model.Model, error) {
 	if rf.key == "" && len(rf.refs) == 0 {
 		return nil, errors.New("no reference given: use --key NAME and/or --ref FILE")
@@ -103,14 +103,14 @@ func bootstrapNotice(w io.Writer, key string) {
 	fmt.Fprintf(w, "no model for key %q yet -- recording baseline run\n", key)
 }
 
-// notify delivers one of lpi's own out-of-band lines -- a capture warning,
+// notify delivers of lpi's own out-of-band lines -- a capture warning,
 // pipe's interrupt notice, the printed recovery command. Live paths back it
 // with the renderer's Message (called under the same mutex that serializes
 // rendering) so the line never lands glued onto a painted status or a
 // partial child line; paths with no renderer print plainly.
 type notify func(format string, args ...any)
 
-// plainNotify prints out-of-band lines directly to w, one whole line each,
+// plainNotify prints out-of-band lines directly to w, whole line each,
 // for paths with no active renderer (e.g. a json-stream pipe).
 func plainNotify(w io.Writer) notify {
 	return func(format string, args ...any) {
@@ -145,7 +145,7 @@ func availableKeys(db string) string {
 	return "available: " + strings.Join(keys, ", ")
 }
 
-// loadOrCreate returns the model stored for key, or a fresh one when the
+// loadOrCreate returns the model stored for key, or a fresh when the
 // database has no entry yet.
 func loadOrCreate(db, key string) (*model.Model, error) {
 	m, err := model.Load(model.PathForKey(db, key))
@@ -201,7 +201,7 @@ func keepCapture(msg notify, cw *model.CaptureWriter, db, key string) {
 
 // keepOrDiscardCapture keeps the capture file with recovery instructions
 // when dig holds anything recoverable, and removes it otherwise: with fewer
-// than 2 nonempty lines the printed recovery command could never succeed,
+// than nonempty lines the printed recovery command could never succeed,
 // and a hint that cannot work is worse than none.
 func keepOrDiscardCapture(msg notify, dig *model.Digester, cw *model.CaptureWriter, db, key string) {
 	if _, err := dig.Finish(); err != nil {
@@ -232,13 +232,13 @@ type jsonSnapshot struct {
 	MatchedLines       int      `json:"matched_lines"`
 	NovelLines         int      `json:"novel_lines"`
 	OverflowLines      int      `json:"overflow_lines"`
-	// Auto-mode fields; omitted at their zero values so plain estimator
+	// Auto-mode fields; omitted at their values so plain estimator
 	// snapshots keep their existing JSON byte-identical.
 	Identifying bool   `json:"identifying,omitempty"`
 	Label       string `json:"pattern,omitempty"`
 }
 
-// writeJSONSnapshot writes s as one JSON object followed by a newline.
+// writeJSONSnapshot writes s as JSON object followed by a newline.
 func writeJSONSnapshot(w io.Writer, s progress.Snapshot) error {
 	js := jsonSnapshot{
 		Progress:           s.Progress,
@@ -296,7 +296,7 @@ func (f *lineFeeder) feed(line string) {
 	f.est.Observe(line, at)
 }
 
-// sourceName labels a live-learned run, e.g. "run 2026-07-02 15:04:05 make".
+// sourceName labels a live-learned run, e.g. "run make".
 func sourceName(mode string, args []string) string {
 	name := mode + " " + time.Now().Format("2006-01-02 15:04:05")
 	if len(args) > 0 {

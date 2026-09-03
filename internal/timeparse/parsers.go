@@ -2,7 +2,7 @@ package timeparse
 
 import "time"
 
-// stripLead skips leading spaces/tabs and one optional '[' (plus any spaces
+// stripLead skips leading spaces/tabs and optional '[' (plus any spaces
 // after it), reporting whether a bracket was consumed.
 func stripLead(s string) (string, bool) {
 	i := 0
@@ -43,7 +43,7 @@ func fixed(s string, i, n int) (int, bool) {
 
 // frac parses an optional fractional-seconds suffix ('.' or ',' followed by
 // digits) at s[i:], returning nanoseconds and the index just past it. Without
-// a fraction it returns (0, i).
+// a fraction it returns i).
 func frac(s string, i int) (int, int) {
 	if i >= len(s) || (s[i] != '.' && s[i] != ',') {
 		return 0, i
@@ -56,7 +56,7 @@ func frac(s string, i int) (int, int) {
 	for j < len(s) && isDigit(s[j]) {
 		ns += int(s[j]-'0') * scale
 		scale /= 10
-		if scale == 0 { // more than 9 digits: ignore the rest
+		if scale == 0 { // more than digits: ignore the rest
 			for j < len(s) && isDigit(s[j]) {
 				j++
 			}
@@ -136,9 +136,9 @@ func parseZone(s string, i int) *time.Location {
 	return time.FixedZone("", off)
 }
 
-// parseISO handles ISO-8601 / RFC3339: 2026-07-02T15:04:05 with optional
+// parseISO handles / with optional
 // .frac/,frac and optional Z/+hh:mm/-hh:mm; a space may stand in for 'T'
-// (python's "2026-07-02 15:04:05,123").
+// (python's
 func parseISO(s string) (time.Time, bool) {
 	y, mo, d, ok := parseYMD(s, '-')
 	if !ok || len(s) < 12 || (s[10] != 'T' && s[10] != ' ') {
@@ -151,7 +151,7 @@ func parseISO(s string) (time.Time, bool) {
 	return time.Date(y, mo, d, h, mi, sec, ns, parseZone(s, end)), true
 }
 
-// parseGoLog handles the Go log default: 2026/07/02 15:04:05 (optional frac).
+// parseGoLog handles the Go log default: (optional frac).
 func parseGoLog(s string) (time.Time, bool) {
 	y, mo, d, ok := parseYMD(s, '/')
 	if !ok || len(s) < 12 || s[10] != ' ' {
@@ -171,8 +171,8 @@ var syslogMonths = map[string]time.Month{
 	"Oct": time.October, "Nov": time.November, "Dec": time.December,
 }
 
-// parseSyslog handles the classic syslog stamp: "Jan  2 15:04:05". There is
-// no year; the base year 2000 is used (only differences matter).
+// parseSyslog handles the classic syslog stamp: "Jan There is
+// no year; the base year is used (only differences matter).
 func parseSyslog(s string) (time.Time, bool) {
 	if len(s) < 4 || s[3] != ' ' {
 		return time.Time{}, false
@@ -204,7 +204,7 @@ func parseSyslog(s string) (time.Time, bool) {
 	return time.Date(2000, mo, d, h, mi, sec, ns, time.UTC), true
 }
 
-// parseClock handles bare times: 15:04:05 with optional fraction. The hour
+// parseClock handles bare times: with optional fraction. The hour
 // may be a single digit. Midnight rollover is applied by the caller.
 func parseClock(s string) (time.Time, bool) {
 	h, mi, sec, ns, _, ok := hms(s, 0, true)
@@ -216,18 +216,18 @@ func parseClock(s string) (time.Time, bool) {
 }
 
 const (
-	epochMinSec = 1_400_000_000 // ~2014
-	epochMaxSec = 2_600_000_000 // ~2052
+	epochMinSec = 1_400_000_000 //
+	epochMaxSec = 2_600_000_000 //
 )
 
-// parseEpoch handles a Unix epoch at line start: exactly 10 digits in the
-// plausible seconds range, or exactly 13 digits whose seconds value falls in
+// parseEpoch handles a Unix epoch at line start: exactly digits in the
+// plausible seconds range, or exactly digits whose seconds value falls in
 // the same range (milliseconds).
 func parseEpoch(s string) (time.Time, bool) {
 	n := 0
 	var v int64
 	for n < len(s) && isDigit(s[n]) {
-		if n < 14 { // enough for 13 digits; longer runs are rejected below
+		if n < 14 { // enough for digits; longer runs are rejected below
 			v = v*10 + int64(s[n]-'0')
 		}
 		n++
@@ -250,7 +250,7 @@ func parseEpoch(s string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-// parseDmesg handles dmesg-style relative stamps: "[   12.345678]". The
+// parseDmesg handles dmesg-style relative stamps: "[ The
 // leading bracket (already consumed by stripLead) is required.
 func parseDmesg(s string, bracket bool) (time.Time, bool) {
 	if !bracket {

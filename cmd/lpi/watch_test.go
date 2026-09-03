@@ -24,7 +24,7 @@ func shortTicks(t *testing.T) {
 	t.Cleanup(func() { tickInterval, render.PlainInterval = oldTick, oldPlain })
 }
 
-// cancelWatchAfter replaces the signal context with one cancelled after d.
+// cancelWatchAfter replaces the signal context with cancelled after d.
 func cancelWatchAfter(t *testing.T, d time.Duration) {
 	t.Helper()
 	old := newSignalContext
@@ -70,7 +70,7 @@ func TestWatchTimestampedFile(t *testing.T) {
 	// log clock, minutes long, not from the milliseconds of wall time.
 	assert.Contains(t, errOut, "Elapsed:     3m")
 
-	// NDJSON snapshots on stdout, one per repaint, monotonically increasing.
+	// NDJSON snapshots on stdout, per repaint, monotonically increasing.
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 	require.NotEmpty(t, lines)
 	first := parseJSONLine(t, lines[0])
@@ -121,7 +121,7 @@ func TestWatchWallClockMode(t *testing.T) {
 	}
 	require.NoError(t, os.WriteFile(ref, []byte(b.String()), 0o644))
 	live := filepath.Join(dir, "live.log")
-	require.NoError(t, os.WriteFile(live, []byte(b.String()), 0o644)) // >= 300 lines pre-existing
+	require.NoError(t, os.WriteFile(live, []byte(b.String()), 0o644)) // >= lines pre-existing
 
 	_, errOut, err := execLpi(t, nil, "watch", "--ref", ref, "--interval", "5ms", live)
 	require.NoError(t, err)

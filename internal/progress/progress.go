@@ -11,7 +11,7 @@ import (
 
 // Snapshot is a point-in-time progress estimate.
 type Snapshot struct {
-	// Progress is the primary estimate in 0..1: time-weighted, which equals
+	// Progress is the primary estimate in time-weighted, which equals
 	// units-weighted when the reference has no times.
 	Progress   float64
 	UnitsDone  int
@@ -25,16 +25,16 @@ type Snapshot struct {
 
 	ETA     time.Duration
 	ETAKind string  // "pace" | "ref-pace" | "none"
-	Pace    float64 // elapsed vs reference speed ratio; 0 if unknown
+	Pace    float64 // elapsed vs reference speed ratio; if unknown
 
 	MatchRate  float64
 	Confidence string // "high" | "medium" | "low" | "none"
 
 	// Identifying is set by the Chooser while it is still deciding which
-	// stored pattern the output belongs to; plain Estimators leave it zero.
+	// stored pattern the output belongs to; plain Estimators leave it
 	Identifying bool
 	// Label is the display label of the pattern the Chooser locked onto;
-	// plain Estimators leave it zero.
+	// plain Estimators leave it
 	Label string
 
 	CurrentLines, MatchedLines, NovelLines, OverflowLines int
@@ -55,15 +55,15 @@ type Estimator struct {
 }
 
 // NewEstimator returns an Estimator matching against m. An empty model
-// (TotalUnits 0, as used by the live-learning baseline recording) is valid:
-// every line counts as novel, Progress and UnitsPct stay 0, ETAKind and
+// (TotalUnits as used by the live-learning baseline recording) is valid:
+// every line counts as novel, Progress and UnitsPct stay ETAKind and
 // Confidence stay "none", and no field ever becomes NaN or Inf.
 func NewEstimator(m *model.Model) *Estimator {
 	return &Estimator{m: m, seen: make(map[uint64]int)}
 }
 
-// Observe feeds one live log line, stamped with the wall-clock time it was
-// seen (zero if unknown). Lines whose normalized form is empty are skipped
+// Observe feeds live log line, stamped with the wall-clock time it was
+// seen if unknown). Lines whose normalized form is empty are skipped
 // entirely.
 func (e *Estimator) Observe(line string, at time.Time) {
 	norm := fingerprint.Normalize(line)

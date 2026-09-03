@@ -12,7 +12,7 @@ import (
 const currentVersion = 1
 
 // envelope is the persisted form of a model; derived fields are rebuilt on
-// load. Invocations was added within version 1: gob tolerates the field
+// load. Invocations was added within version gob tolerates the field
 // being absent (old file, new reader) and unknown (new file, old reader)
 // alike, so no version bump is needed.
 type envelope struct {
@@ -24,7 +24,7 @@ type envelope struct {
 
 // Save writes the model as a gzip-compressed gob envelope, creating parent
 // directories as needed. The write is atomic: the envelope goes to a temp
-// file in the same directory which is renamed over the target only once it
+// file in the same directory which is renamed over the target only it
 // is complete, so a crash or full disk mid-save can never destroy the
 // existing model or leave a truncated file that bricks the key.
 func (m *Model) Save(path string) error {
@@ -105,14 +105,14 @@ func DefaultDir() string {
 }
 
 // PathForKey maps a model key to its file path under dir: the key is
-// sanitized to [A-Za-z0-9._-] (any other byte becomes '_', an empty result
+// sanitized to (any other byte becomes '_', an empty result
 // becomes "default") and ".lpi" is appended.
 func PathForKey(dir, key string) string {
 	return filepath.Join(dir, sanitizeKey(key)+".lpi")
 }
 
 // sanitizeKey maps a model key to a safe file-name fragment: bytes outside
-// [A-Za-z0-9._-] become '_', and an empty result becomes "default".
+// become '_', and an empty result becomes "default".
 func sanitizeKey(key string) string {
 	san := make([]byte, 0, len(key))
 	for i := 0; i < len(key); i++ {

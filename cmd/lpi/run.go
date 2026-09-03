@@ -118,8 +118,8 @@ yet) and the next invocation gets a real estimate. With a --ref, a missing
 	},
 }
 
-// finishLearn completes the learning side of a run once the child has
-// exited: on success (exit 0, or --learn-on-failure) the digest is saved
+// finishLearn completes the learning side of a run the child has
+// exited: on success (exit or --learn-on-failure) the digest is saved
 // into the model and the capture file removed; on a failed run the digest
 // is dropped -- a truncated log would corrupt the time-gap weights -- but
 // the capture file is kept and the recovery command printed, so the data
@@ -134,7 +134,7 @@ func (lv *liveRun) finishLearn(errW io.Writer, exitCode int, args []string) erro
 	}
 	run, err := lv.dig.Finish()
 	if err != nil {
-		// The only Finish failure is <2 nonempty lines: nothing recoverable.
+		// The only Finish failure is nonempty lines: nothing recoverable.
 		lv.capture.Discard()
 		return fmt.Errorf("run not learned: %w", err)
 	}
@@ -155,7 +155,7 @@ type feeder interface {
 	Snapshot() progress.Snapshot
 }
 
-// liveRun is the shared live state of one run invocation. The mutex
+// liveRun is the shared live state of run invocation. The mutex
 // serializes the estimator, digester, capture writer, and renderer across
 // the stdout consumer, stderr consumer, and ticker goroutines; passthrough
 // writes on both streams share it via the renderer's Passthrough writers,
@@ -199,7 +199,7 @@ func (lv *liveRun) execute(cmd *cobra.Command, args []string) (int, error) {
 
 	// Both passthrough streams coordinate with the renderer under lv.mu, so
 	// a painted status line is erased before child bytes reach the terminal
-	// and repainted after them -- the two never share a terminal line.
+	// and repainted after them -- the never share a terminal line.
 	outW := lv.r.Passthrough(cmd.OutOrStdout(), &lv.mu)
 	errW := lv.r.Passthrough(cmd.ErrOrStderr(), &lv.mu)
 	var wg sync.WaitGroup
@@ -250,9 +250,9 @@ func (lv *liveRun) execute(cmd *cobra.Command, args []string) (int, error) {
 }
 
 // childExitCode maps the child's ExitError to the code lpi propagates: the
-// child's own exit code, or 128+N when signal N killed it (the shell
-// convention: SIGTERM -> 143). The syscall.WaitStatus assertion is kept in
-// this one file rather than behind build tags because the type exists on
+// child's own exit code, or when signal N killed it (the shell
+// convention: SIGTERM -> The syscall.WaitStatus assertion is kept in
+// this file rather than behind build tags because the type exists on
 // every GOOS this package already builds on (it requires syscall.SIGTERM
 // above); non-Unix implementations simply report Signaled() == false and
 // fall through to the generic path.
@@ -266,7 +266,7 @@ func childExitCode(ee *exec.ExitError) int {
 	return 1
 }
 
-// consume forwards one child stream byte-faithfully (the tee sits at the
+// consume forwards child stream byte-faithfully (the tee sits at the
 // reader) while feeding its lines to the estimator with wall-clock times.
 // When learning, every line the digester consumes is also appended to the
 // capture file with the same stamp, so replaying the file reconstructs the

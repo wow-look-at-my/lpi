@@ -3,7 +3,7 @@
 // Variable content (timestamps, counters, hex ids, addresses, durations,
 // percentages) is replaced by '#', ANSI escapes and progress-bar rewrites are
 // stripped, and whitespace is collapsed, so that the same logical log line
-// from two different runs maps to the same 64-bit fingerprint while
+// from separate runs maps to the same fingerprint while
 // identifying text (file paths, target names, messages) is preserved.
 package fingerprint
 
@@ -74,8 +74,8 @@ func emitSpace(out []byte, pending *bool) []byte {
 
 // skipEscape consumes an ANSI escape sequence starting at s[i] == ESC and
 // returns the index just past it. CSI sequences (ESC '[' ... final byte
-// 0x40-0x7e) and OSC sequences (ESC ']' ... BEL or ESC '\') are consumed in
-// full; any other ESC is treated as a two-byte sequence.
+// and OSC sequences (ESC ']' ... BEL or ESC '\') are consumed in
+// full; any other ESC is treated as a sequence.
 func skipEscape(s string, i int) int {
 	i++ // consume ESC
 	if i >= len(s) {
@@ -108,19 +108,19 @@ func skipEscape(s string, i int) int {
 			i++
 		}
 		return i
-	default: // other two-byte sequence
+	default: // other sequence
 		return i + 1
 	}
 }
 
-// appendToken appends the normalized form of one word token ([A-Za-z0-9]+)
+// appendToken appends the normalized form of word token
 // to out. Replacement rules, in priority order:
 //
-//  1. all digits                                      -> "#"
-//  2. "0x"/"0X" followed by hex digits                -> "#"
-//  3. all hex, len >= 6, >= 1 digit and >= 1 letter   -> "#"  (git SHAs)
-//  4. all hex, len >= 8, >= 1 digit                   -> "#"
-//  5. otherwise each maximal digit run becomes "#"    ("foo123bar" -> "foo#bar")
+//  all digits -> "#"
+//  followed by hex digits -> "#"
+//  all hex, len >= >= digit and >= letter -> "#" (git SHAs)
+//  all hex, len >= >= digit -> "#"
+//  otherwise each maximal digit run becomes "#" -> "foo#bar")
 func appendToken(out []byte, tok string) []byte {
 	allDigits, allHex, hasDigit, hasLetter := true, true, false, false
 	for i := 0; i < len(tok); i++ {
@@ -129,7 +129,7 @@ func appendToken(out []byte, tok string) []byte {
 			continue
 		}
 		allDigits = false
-		hasLetter = true // tokens contain only [A-Za-z0-9]
+		hasLetter = true // tokens contain only
 		if !isHexByte(tok[i]) {
 			allHex = false
 		}
@@ -158,14 +158,14 @@ func appendToken(out []byte, tok string) []byte {
 	return out
 }
 
-// uuidLen is the byte length of a canonical UUID: 8-4-4-4-12 hex groups.
+// uuidLen is the byte length of a canonical UUID: hex groups.
 const uuidLen = 36
 
 var uuidGroups = [5]int{8, 4, 4, 4, 12}
 
 // uuidAt reports whether s[i:] starts with a canonical UUID that is not
 // embedded in a longer word token. This pre-check is needed because the
-// 4-char hex groups would not be caught by the hex token rules.
+// hex groups would not be caught by the hex token rules.
 func uuidAt(s string, i int) bool {
 	if i+uuidLen > len(s) {
 		return false

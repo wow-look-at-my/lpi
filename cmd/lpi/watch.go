@@ -19,7 +19,7 @@ import (
 )
 
 // newSignalContext is a seam so tests can substitute a cancellable context
-// for the SIGINT/SIGTERM one.
+// for the SIGINT/SIGTERM
 var newSignalContext = func() (context.Context, context.CancelFunc) {
 	return signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 }
@@ -76,7 +76,7 @@ wall clock is used. Stop with Ctrl-C to get a final summary.`,
 	},
 }
 
-// watcher holds the live state of one watch invocation. The mutex
+// watcher holds the live state of watch invocation. The mutex
 // serializes estimator access (progress.Estimator is not concurrency-safe)
 // and doubles as the coordination lock of the NDJSON passthrough writer.
 type watcher struct {
@@ -117,7 +117,7 @@ func (w *watcher) loop(lines <-chan string) {
 }
 
 // drainBatch collects everything immediately available after first, so a
-// burst is fed and rendered as one batch.
+// burst is fed and rendered as batch.
 func (w *watcher) drainBatch(first string, lines <-chan string) []string {
 	batch := []string{first}
 	for {
@@ -160,7 +160,7 @@ func (w *watcher) decideLocked() {
 	w.pending = nil
 }
 
-// update repaints the status line and, when streaming, emits one NDJSON
+// update repaints the status line and, when streaming, emits NDJSON
 // snapshot.
 func (w *watcher) update() {
 	w.mu.Lock()

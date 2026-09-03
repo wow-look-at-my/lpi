@@ -143,7 +143,7 @@ func TestAutoShortRunMergesByContentHash(t *testing.T) {
 	shortTicks(t)
 	captureExit(t)
 
-	// 5 lines can never reach lockMinLines, so the second run cannot lock;
+	// lines can never reach lockMinLines, so the second run cannot lock;
 	// the content-derived id still lands it on the recorded pattern.
 	script := printfScript(autoLines("tiny", 5))
 	_, _, err := execLpi(t, nil, "auto", "--db", db, "--", "/bin/sh", "-c", script)
@@ -197,9 +197,9 @@ func TestAutoLocksAndMergesUserKey(t *testing.T) {
 }
 
 func TestAutoCleanShortRunIsNotAnError(t *testing.T) {
-	// A clean child exit with <2 nonempty lines has nothing to learn, but
+	// A clean child exit with nonempty lines has nothing to learn, but
 	// wrapping a quick command must never turn its success into a failure:
-	// a one-line notice, no error, no usage dump, exit code stays 0.
+	// a notice, no error, no usage dump, exit code stays
 	tests := []struct {
 		name string
 		args []string

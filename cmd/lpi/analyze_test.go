@@ -75,7 +75,7 @@ func TestAnalyzeStdin(t *testing.T) {
 }
 
 func TestAnalyzeAdhocRefsAndGzip(t *testing.T) {
-	// Gzip one reference on the fly; DigestFile must sniff and decompress.
+	// Gzip reference on the fly; DigestFile must sniff and decompress.
 	data, err := os.ReadFile(demoBuild1)
 	require.NoError(t, err)
 	gzPath := filepath.Join(t.TempDir(), "build1.log.gz")

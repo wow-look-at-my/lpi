@@ -68,7 +68,7 @@ func TestLearnThenModelLifecycle(t *testing.T) {
 }
 
 // captureContent is a minimal hand-written capture file body: header with a
-// label, then stamp<TAB>text records one second apart.
+// label, then stamp<TAB>text records second apart.
 const captureContent = "#lpi-capture v1\trescued run\n" +
 	"1000000000\talpha builds\n" +
 	"2000000000\tbeta links\n" +

@@ -10,8 +10,8 @@ import (
 )
 
 // captureMagic is the first line of a capture file, optionally followed by
-// one tab and a source label. Each subsequent record is
-// "<int64 unix nanoseconds>\t<line text>\n", split on the FIRST tab only, so
+// tab and a source label. Each subsequent record is
+// unix nanoseconds>\t<line text>\n", split on the FIRST tab only, so
 // the line text may itself contain tabs. Times are out-of-band because
 // fingerprints hash the full line text: prepending stamps in-band would
 // produce templates that never match live lines.
@@ -59,7 +59,7 @@ func NewCaptureWriter(db, key, source string) (*CaptureWriter, error) {
 	}
 	header := captureMagic
 	if source != "" {
-		// The header is one line; a newline in the label would corrupt it.
+		// The header is line; a newline in the label would corrupt it.
 		header += "\t" + strings.NewReplacer("\n", " ", "\r", " ").Replace(source)
 	}
 	if _, err := f.WriteString(header + "\n"); err != nil {
@@ -70,9 +70,9 @@ func NewCaptureWriter(db, key, source string) (*CaptureWriter, error) {
 	return &CaptureWriter{f: f, path: path}, nil
 }
 
-// Add appends one consumed line stamped with its time. After the first
+// Add appends consumed line stamped with its time. After the first
 // write failure the file is closed and further calls are silent no-ops; the
-// failure is returned exactly once so the caller can print one warning --
+// failure is returned exactly so the caller can print warning --
 // capture must never break the run it is protecting.
 func (cw *CaptureWriter) Add(text string, at time.Time) error {
 	if cw == nil || cw.f == nil {
@@ -126,7 +126,7 @@ func parseCaptureHeader(line string) (label string, ok bool) {
 	return "", false
 }
 
-// parseCaptureRecord splits one capture record into its line text and time.
+// parseCaptureRecord splits capture record into its line text and time.
 // A malformed record (no tab, or a non-numeric stamp) degrades to the whole
 // line with an unknown time rather than an error.
 func parseCaptureRecord(line string) (string, time.Time) {

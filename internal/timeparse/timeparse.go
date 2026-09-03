@@ -29,7 +29,7 @@ const (
 
 var kindNames = [numKinds]string{"iso8601", "golog", "syslog", "epoch", "dmesg", "clock"}
 
-// Format parses one timestamp flavor. Parse is stateful -- bare clock times
+// Format parses timestamp flavor. Parse is stateful -- bare clock times
 // roll over midnight -- so a Format must not be shared between goroutines.
 type Format struct {
 	kind      kind
@@ -37,7 +37,7 @@ type Format struct {
 	dayOffset time.Duration
 }
 
-// Name returns a short identifier for the format ("iso8601", "clock", ...).
+// Name returns a short identifier for the format "clock", ...).
 func (f *Format) Name() string { return kindNames[f.kind] }
 
 // Parse extracts this format's timestamp from the start of line. Lines that
@@ -66,7 +66,7 @@ func (f *Format) Parse(line string) (time.Time, bool) {
 }
 
 // rollover applies stateful midnight handling for bare clock times: when a
-// new time is earlier than the last seen by more than two hours, a day is
+// new time is earlier than the last seen by more than hours, a day is
 // added. The accumulated day offset persists across calls, so multi-midnight
 // runs keep increasing.
 func (f *Format) rollover(t time.Time) time.Time {
@@ -85,9 +85,9 @@ const (
 	detectMinRate = 0.3
 )
 
-// Detect samples up to 300 lines and returns the format that matches the
-// most lines, provided it matches at least 30% of the non-empty sample and
-// has at least 5 hits. It returns nil when no format qualifies.
+// Detect samples up to lines and returns the format that matches the
+// most lines, provided it matches at least of the non-empty sample and
+// has at least hits. It returns nil when no format qualifies.
 func Detect(lines []string) *Format {
 	if len(lines) > detectSample {
 		lines = lines[:detectSample]

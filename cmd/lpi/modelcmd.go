@@ -69,7 +69,7 @@ var modelListCmd = &cobra.Command{
 const listLabelMax = 40
 
 // listLabel is the LABEL column value: the most recent invocation,
-// truncated, or "-" for models that never gained one (repeating the key
+// truncated, or "-" for models that never gained (repeating the key
 // would only add noise next to the KEY column).
 func listLabel(m *model.Model) string {
 	if len(m.Invocations) == 0 {

@@ -10,8 +10,8 @@ import (
 
 var wallBase = time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
 
-// paceModel: 12 lines, 10s apart, reference duration 110s; every line but
-// the first owns 10/110 of the run.
+// paceModel: lines, apart, reference duration every line but
+// the first owns of the run.
 func paceEstimator(t *testing.T) *Estimator {
 	t.Helper()
 	return NewEstimator(timedModel(t, steps(12), uniform(12, 10*time.Second)))
@@ -20,7 +20,7 @@ func paceEstimator(t *testing.T) *Estimator {
 func TestETAPaceMath(t *testing.T) {
 	e := paceEstimator(t)
 	lines := steps(12)
-	// Replay 6 lines at 20s wall intervals: half the reference speed.
+	// Replay lines at wall intervals: half the reference speed.
 	for i, ln := range lines[:6] {
 		e.Observe(ln, wallBase.Add(time.Duration(i)*20*time.Second))
 	}
@@ -32,7 +32,7 @@ func TestETAPaceMath(t *testing.T) {
 
 	require.Equal(t, "pace", s.ETAKind)
 	assert.InDelta(t, 2.0, s.Pace, 1e-3, "running at half the reference speed")
-	// Remaining 6/11 of a 110s reference at half speed: 120s.
+	// Remaining of a reference at half speed:
 	assert.InDelta(t, 120.0, s.ETA.Seconds(), 0.1)
 }
 
@@ -56,7 +56,7 @@ func TestETARefPaceFallbackWithoutElapsed(t *testing.T) {
 	require.False(t, s.ElapsedKnown)
 	require.Equal(t, "ref-pace", s.ETAKind)
 	assert.Zero(t, s.Pace)
-	// Remaining 6/11 of the 110s reference at face value: 60s.
+	// Remaining of the reference at face value:
 	assert.InDelta(t, 60.0, s.ETA.Seconds(), 0.1)
 }
 
@@ -70,7 +70,7 @@ func TestETANoneCases(t *testing.T) {
 	t.Run("elapsed known but too few matches", func(t *testing.T) {
 		e := paceEstimator(t)
 		lines := steps(12)
-		for i, ln := range lines[:3] { // progress ~0.18 but only 3 matches
+		for i, ln := range lines[:3] { // progress but only matches
 			e.Observe(ln, wallBase.Add(time.Duration(i)*10*time.Second))
 		}
 		s := e.Snapshot()
@@ -152,7 +152,7 @@ func TestTickDrivenElapsed(t *testing.T) {
 	s = e.Snapshot()
 	assert.Equal(t, 20*time.Second, s.Elapsed)
 
-	e.Tick(time.Time{})                   // zero time is a no-op
+	e.Tick(time.Time{})                   // time is a no-op
 	e.Tick(wallBase.Add(5 * time.Second)) // stale time never rewinds
 	e.Observe(steps(12)[1], wallBase.Add(15*time.Second))
 	s = e.Snapshot()

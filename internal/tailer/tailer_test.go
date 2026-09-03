@@ -161,6 +161,6 @@ func TestHardErrorOnDirectory(t *testing.T) {
 func TestDefaultInterval(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "a.log")
 	append_(t, path, "hi\n")
-	lines, _, _ := start(t, &Tailer{Path: path, FromStart: true}) // Interval zero
+	lines, _, _ := start(t, &Tailer{Path: path, FromStart: true}) // Interval
 	wantLine(t, lines, "hi")
 }

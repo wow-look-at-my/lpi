@@ -33,7 +33,7 @@ type Model struct {
 	// TotalUnits is the total expected line count (sum of expected
 	// occurrence counts).
 	TotalUnits int
-	// RefDuration is the upper-median duration of the timed runs (0 when
+	// RefDuration is the upper-median duration of the timed runs when
 	// no run has times).
 	RefDuration time.Duration
 	// HasTimes reports whether any run has usable times.
@@ -71,7 +71,7 @@ func (m *Model) AddInvocation(cmd string) {
 }
 
 // DisplayLabel is the model's human-facing name: the most recent recorded
-// invocation when one exists, else the key.
+// invocation when exists, else the key.
 func (m *Model) DisplayLabel() string {
 	if len(m.Invocations) > 0 {
 		return m.Invocations[0]
@@ -80,9 +80,9 @@ func (m *Model) DisplayLabel() string {
 }
 
 // AutoKey derives the storage id for an auto-recorded pattern from the
-// run's content: "auto." plus 16 lowercase hex chars of an FNV-1a 64 hash
+// run's content: "auto." plus lowercase hex chars of an hash
 // over the run's fingerprint multiset (each fingerprint and its occurrence
-// count, in ascending fingerprint order, 8 bytes big-endian each). The id
+// count, in ascending fingerprint order, bytes big-endian each). The id
 // is only a storage handle -- pattern identity is the content itself,
 // re-established by the fit chooser on every run -- but a content-derived
 // id makes re-recording identical output land on the same file. "auto." is
@@ -127,7 +127,7 @@ func (m *Model) Rebuild() {
 			counts[i] = len(r.Occ[fp])
 		}
 		slices.Sort(counts)
-		// Upper median: with 2 runs this is the max, so one incremental or
+		// Upper median: with runs this is the max, so incremental or
 		// truncated run cannot drop expected lines.
 		expect := counts[n/2]
 		if expect == 0 {
@@ -164,7 +164,7 @@ func (m *Model) mergeOccurrences(fp uint64, expect int) []Occurrence {
 	return occs
 }
 
-// renormalizeWeights scales all WeightFrac so their grand total is 1.
+// renormalizeWeights scales all WeightFrac so their grand total is
 func (m *Model) renormalizeWeights() {
 	var total float64
 	for _, occs := range m.Expect {
