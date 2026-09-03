@@ -1,15 +1,10 @@
 package render
 
 import (
-	"bytes"
-	"io"
-	"os"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/wow-look-at-my/log-progress-indicator/internal/progress"
 )
@@ -215,4 +210,3 @@ func TestSummaryNoETANoTimes(t *testing.T) {
 		"Reference:   80 units, no timing data\n"
 	assert.Equal(t, want, Summary(s))
 }
-

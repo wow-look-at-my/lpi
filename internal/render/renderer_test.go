@@ -10,9 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/wow-look-at-my/log-progress-indicator/internal/progress"
 )
+
 // forceTTY pins IsTTY to a fixed answer for the
 func forceTTY(t *testing.T, tty bool) {
 	t.Helper()
