@@ -39,7 +39,9 @@ is read first by default -- the history is what the estimate is built from.
 
 Timestamps are auto-detected from the first lines seen: when the file has
 them, elapsed time and pace come from the log's own clock; otherwise the
-wall clock is used. Stop with Ctrl-C to get a final summary.`,
+wall clock is used. --format pins how the stamps are read (a builtin name,
+or a regex with named groups), skipping detection entirely. Stop with
+Ctrl-C to get a final summary.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		m, err := watchOpts.rf.resolve()

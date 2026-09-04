@@ -27,7 +27,14 @@ runs are evicted beyond ` + fmt.Sprint(model.MaxRuns) + `); --replace starts
 the key from scratch instead. Gzipped logs are handled transparently, as are
 the capture files a failed 'lpi run --learn' or 'lpi pipe --learn-key' keeps
 under <db>/pending/ -- they replay with the exact per-line times of the
-recorded run, and once learned they are removed from pending/.`,
+recorded run, and once learned they are removed from pending/.
+
+Timestamps are auto-detected and the reader used is reported per file. For
+stamps no builtin knows, --format takes a regex with named groups, e.g.
+--format '^\((?P<time>[^)]+)\)' --time-layout '02.01.2006 15h04m05s', or
+component groups such as year/month/day/hour/min/sec/frac/zone, or the
+whole-stamp groups epoch/epochms/epochns. Lines the regex misses keep the
+previous line's time, so a mix of stamped and unstamped lines is fine.`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		key := learnOpts.rf.key

@@ -23,7 +23,9 @@ var analyzeCmd = &cobra.Command{
 	Long: `Analyze estimates how far along a task is from a partial log file,
 matched against the reference model. Pass '-' to read the partial log from
 stdin. Timestamps are auto-detected from the first ` + "300" + ` lines; when
-present, elapsed time and a pace-adjusted ETA come from them.`,
+present, elapsed time and a pace-adjusted ETA come from them. --format pins
+how each line's stamp is read (a builtin name, or a regex with named
+groups) instead of detecting it.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		m, err := analyzeOpts.rf.resolve()

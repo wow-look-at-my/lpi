@@ -31,7 +31,10 @@ cmd/lpi/               cobra CLI: one command per file, self-registering via
 internal/
   fingerprint/  line normalization (hand-rolled, no regexp) + FNV-1a hashing
   linescan/     long-line-safe line splitting (1 MiB cap, \r strip)
-  timeparse/    timestamp format detection and stateful parsing
+  timeparse/    timestamp format detection and stateful parsing;
+                custom.go: Compile builds the reader behind
+                --format/--time-layout (builtin name, regex with named
+                groups, or Go layout)
   model/        run digestion (time-gap weights), run merging, persistence
                 (atomic save), invocation labels + AutoKey content ids,
                 capture.go: durable capture files for
@@ -74,6 +77,11 @@ testdata/demo/         two complete fake cmake builds + a ~55% partial run,
 - `progress.Estimator` is NOT concurrency-safe: watch/run wrap it (and the
   renderer) in a mutex; run/pipe passthrough writes share that mutex via
   render's Passthrough writers.
+- Stamp reading is pinnable: learn/analyze/watch (and any `--ref` log) take
+  `--format` (auto, a builtin name, or a regex with named groups) plus
+  `--time-layout`; nil format means detect. A missed line carries the
+  previous time, and `Run.TimeFormat` records which reader ran, which is
+  what `learn` prints. Depth: docs/DESIGN.md, "User-specified formats".
 - Live modes never mix time sources: a detected log-timestamp format wins
   (carry-forward for unparsable lines); otherwise wall clock plus a periodic
   Tick. watch buffers up to 300 lines (or until the first tick) to decide.
