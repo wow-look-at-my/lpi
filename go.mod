@@ -1,4 +1,4 @@
-module github.com/wow-look-at-my/log-progress-indicator
+module github.com/wow-look-at-my/lpi
 
 go 1.24.0
 

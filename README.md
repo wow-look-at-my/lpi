@@ -1,4 +1,4 @@
-# log-progress-indicator
+# lpi -- log progress indicator
 
 **`lpi` puts a progress bar and an ETA on any long-running task by comparing
 its log output against logs of previous completed runs.**
@@ -10,6 +10,21 @@ the live output against that reference, works out how much of the reference
 run has been covered, and weights every matched line by the share of the
 reference run's *time* it accounted for. Long silent steps (that final link,
 that one slow test) are honestly represented instead of glossed over.
+
+## Install
+
+```sh
+brew tap pazer/build https://brew.pazer.build/tap.git
+brew trust pazer/build
+brew install pazer/build/lpi
+```
+
+Or take the binary straight from buildhost (`os` is `linux`, `darwin` or
+`windows`; `arch` is `amd64` or `arm64`):
+
+```sh
+curl -fLo lpi "https://dl.pazer.build/lpi?os=linux&arch=amd64" && chmod +x lpi
+```
 
 ## Quickstart
 

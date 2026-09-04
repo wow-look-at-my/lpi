@@ -17,4 +17,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # A buildhost description is settable only at project create, so autorelease's own auto-provision can never add one.
+      - name: Ensure the buildhost project exists with its description
+        uses: wow-look-at-my/buildhost/.github/actions/buildhost-create-project@master
+        with:
+          name: lpi
+          description: Estimate task progress by matching a live log against past completed runs
+          homepage: https://github.com/wow-look-at-my/lpi
+          license: MIT
       - uses: wow-look-at-my/go-toolchain@master

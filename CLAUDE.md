@@ -1,4 +1,4 @@
-# log-progress-indicator -- developer notes
+# lpi -- developer notes
 
 `lpi` estimates completion %, units done, and ETA of a long-running task by
 fuzzy-matching its partial log against reference logs of previous completed
@@ -19,6 +19,12 @@ Accept whatever it auto-rewrites (formatting, imports, go.mod) and commit
 those changes; note it refuses to auto-fix files with uncommitted changes,
 so commit first. CI (`.github/workflows/ci.yml`) runs the same via
 `wow-look-at-my/go-toolchain@master`. Tests use `github.com/stretchr/testify`.
+
+Autorelease publishes to the buildhost project `lpi` (`brew install
+pazer/build/lpi`, `https://dl.pazer.build/lpi`). The project name is the repo
+name, and the binary matching it is what keeps the release flat instead of a
+nested `<repo>/lpi`. A buildhost description is settable only at project
+create, so CI creates the project before the build.
 
 ## Layout
 

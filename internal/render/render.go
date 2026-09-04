@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wow-look-at-my/log-progress-indicator/internal/progress"
+	"github.com/wow-look-at-my/lpi/internal/progress"
 )
 
 // PlainInterval is the minimum time between non-TTY

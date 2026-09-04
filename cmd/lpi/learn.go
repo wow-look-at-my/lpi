@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/wow-look-at-my/log-progress-indicator/internal/model"
-	"github.com/wow-look-at-my/log-progress-indicator/internal/render"
+	"github.com/wow-look-at-my/lpi/internal/model"
+	"github.com/wow-look-at-my/lpi/internal/render"
 )
 
 var learnOpts struct {

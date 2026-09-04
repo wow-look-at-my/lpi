@@ -9,9 +9,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/wow-look-at-my/log-progress-indicator/internal/fingerprint"
-	"github.com/wow-look-at-my/log-progress-indicator/internal/linescan"
-	"github.com/wow-look-at-my/log-progress-indicator/internal/timeparse"
+	"github.com/wow-look-at-my/lpi/internal/fingerprint"
+	"github.com/wow-look-at-my/lpi/internal/linescan"
+	"github.com/wow-look-at-my/lpi/internal/timeparse"
 )
 
 // Occurrence is expected appearance of a
