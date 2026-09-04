@@ -28,7 +28,7 @@ type Run struct {
 	Lines    int           // nonempty lines digested
 	Duration time.Duration // if unknown
 	HasTimes bool
-	// TimeFormat names the stamp reader the digest used, empty when none read.
+	// TimeFormat names the stamp reader the digest
 	TimeFormat string `json:",omitempty"`
 	Occ        map[uint64][]Occurrence
 }
@@ -177,11 +177,10 @@ func DigestReader(r io.Reader, source string, format *timeparse.Format) (*Run, e
 // detectLines is how many leading lines DigestFile
 const detectLines = 300
 
-// DigestFile digests a log file into a Run, detecting its stamp format.
+// DigestFile digests a log file into a Run
 func DigestFile(path string) (*Run, error) { return DigestFileWith(path, nil) }
 
-// DigestFileWith digests a log file with a caller-chosen stamp format. A nil
-// format falls back to detection over the leading lines.
+// DigestFileWith digests a log file with a
 func DigestFileWith(path string, format *timeparse.Format) (*Run, error) {
 	f, err := os.Open(path)
 	if err != nil {

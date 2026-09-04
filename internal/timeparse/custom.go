@@ -9,8 +9,7 @@ import (
 	"time"
 )
 
-// Named groups a --format regex may carry. A "time" group hands its text to
-// the builtin parsers (or to a layout); the rest build the stamp piecewise.
+// Named groups a --format regex may carry
 const (
 	grpTime    = "time"
 	grpEpoch   = "epoch"
@@ -31,13 +30,13 @@ var knownGroups = []string{
 	grpYear, grpMonth, grpDay, grpHour, grpMin, grpSec, grpFrac, grpZone,
 }
 
-// Names lists the builtin format names a spec may select.
+// Names lists the builtin format names a spec may
 func Names() []string { return append([]string(nil), kindNames[:]...) }
 
-// Groups lists the named capture groups a --format regex may carry.
+// Groups lists the named capture groups a --format
 func Groups() []string { return append([]string(nil), knownGroups...) }
 
-// custom is a user-specified timestamp reader: a regex, a Go layout, or both.
+// custom is a user-specified timestamp reader: a
 type custom struct {
 	name   string
 	re     *regexp.Regexp
@@ -47,8 +46,7 @@ type custom struct {
 	probed bool
 }
 
-// Compile builds a Format from a user spec and an optional Go layout. An
-// empty spec with no layout asks for detection, reported as a nil Format.
+// Compile builds a Format from a user spec and an
 func Compile(spec, layout string) (*Format, error) {
 	spec = strings.TrimSpace(spec)
 	if spec == "" || strings.EqualFold(spec, "auto") {
@@ -88,8 +86,7 @@ func builtinKind(name string) (kind, bool) {
 	return 0, false
 }
 
-// groupIndex maps the regex's known named groups to their submatch slots and
-// rejects a regex that names none of them.
+// groupIndex maps the regex's known named groups to
 func groupIndex(re *regexp.Regexp) (map[string]int, error) {
 	idx := make(map[string]int)
 	for i, name := range re.SubexpNames() {
@@ -110,7 +107,7 @@ func groupIndex(re *regexp.Regexp) (map[string]int, error) {
 	return idx, nil
 }
 
-// group returns the text of a named group, empty when it did not take part.
+// group returns the text of a named group, empty
 func (c *custom) group(m []string, name string) string {
 	i, ok := c.idx[name]
 	if !ok || i >= len(m) {
@@ -119,8 +116,7 @@ func (c *custom) group(m []string, name string) string {
 	return m[i]
 }
 
-// parse reads the line's stamp. dated is false for a clock-only stamp, which
-// the caller then carries through midnight itself.
+// parse reads the line's stamp
 func (c *custom) parse(line string) (t time.Time, dated, ok bool) {
 	if c.re == nil {
 		return c.parseLayoutPrefix(line)
@@ -135,8 +131,7 @@ func (c *custom) parse(line string) (t time.Time, dated, ok bool) {
 	return c.fromGroups(m)
 }
 
-// parseLayoutPrefix parses a leading window of the line with the layout,
-// widening the window because a layout's rendered width is not its parsed one.
+// parseLayoutPrefix parses a leading window of the
 func (c *custom) parseLayoutPrefix(line string) (time.Time, bool, bool) {
 	base := len(c.layout)
 	for n := base - 3; n <= base+6; n++ {
@@ -150,8 +145,7 @@ func (c *custom) parseLayoutPrefix(line string) (time.Time, bool, bool) {
 	return time.Time{}, false, false
 }
 
-// parseText reads one extracted stamp: with the layout when given, else with
-// the builtin parser that first recognizes it, remembered for later lines.
+// parseText reads extracted stamp: with the layout
 func (c *custom) parseText(text string) (time.Time, bool, bool) {
 	text = strings.TrimSpace(text)
 	if c.layout != "" {
@@ -175,7 +169,7 @@ func (c *custom) parseText(text string) (time.Time, bool, bool) {
 	return time.Time{}, false, false
 }
 
-// probeKind runs one builtin parser over an extracted stamp.
+// probeKind runs builtin parser over an extracted
 func probeKind(k kind, text string) (time.Time, bool, bool) {
 	f := Format{kind: k}
 	t, ok := f.Parse(text)
@@ -185,11 +179,10 @@ func probeKind(k kind, text string) (time.Time, bool, bool) {
 	return t, k != kindClock && k != kindDmesg, true
 }
 
-// dated reports whether a parsed stamp carries a real date rather than the
-// zero year a layout leaves behind.
+// dated reports whether a parsed stamp carries a
 func dated(t time.Time) bool { return t.Year() > 1 }
 
-// fromGroups assembles a stamp from component groups.
+// fromGroups assembles a stamp from component groups
 func (c *custom) fromGroups(m []string) (time.Time, bool, bool) {
 	if t, ok := c.fromEpoch(m); ok {
 		return t, true, true
@@ -219,7 +212,7 @@ func (c *custom) fromGroups(m []string) (time.Time, bool, bool) {
 	return time.Date(y, mo, d, h, mi, sec, ns, loc), hasDate, true
 }
 
-// fromEpoch handles the epoch groups, which carry a whole stamp on their own.
+// fromEpoch handles the epoch groups, which carry a
 func (c *custom) fromEpoch(m []string) (time.Time, bool) {
 	if s := c.group(m, grpEpochNs); s != "" {
 		v, err := strconv.ParseInt(s, 10, 64)
@@ -260,7 +253,7 @@ var longMonths = map[string]time.Month{
 	"november": time.November, "december": time.December,
 }
 
-// parseMonth accepts a number, an abbreviation, or a full month name.
+// parseMonth accepts a number, an abbreviation, or
 func parseMonth(s string) (time.Month, bool) {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -283,7 +276,7 @@ func parseMonth(s string) (time.Month, bool) {
 	return 0, false
 }
 
-// parseFrac reads fractional seconds, with or without their leading point.
+// parseFrac reads fractional seconds, with or
 func parseFrac(s string) int {
 	s = strings.TrimLeft(strings.TrimSpace(s), ".,")
 	if s == "" {
@@ -293,7 +286,7 @@ func parseFrac(s string) int {
 	return ns
 }
 
-// parseZoneText reads Z, a numeric offset, or a name Go knows.
+// parseZoneText reads Z, a numeric offset, or a
 func parseZoneText(s string) *time.Location {
 	s = strings.TrimSpace(s)
 	switch {
@@ -308,7 +301,7 @@ func parseZoneText(s string) *time.Location {
 	return time.UTC
 }
 
-// offsetZone reads +hh:mm, +hhmm, or +hh.
+// offsetZone reads +hh:mm, +hhmm, or +hh
 func offsetZone(s string) *time.Location {
 	digits := strings.ReplaceAll(s[1:], ":", "")
 	if len(digits) == 2 {

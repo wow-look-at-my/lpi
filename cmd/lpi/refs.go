@@ -39,8 +39,7 @@ func addModelFlags(cmd *cobra.Command, rf *refFlags) {
 	cmd.Flags().StringVar(&rf.db, "db", model.DefaultDir(), "model database directory")
 }
 
-// addTimeFlags registers the timestamp-reading flags for commands that digest
-// or follow a log on disk.
+// addTimeFlags registers the timestamp-reading
 func addTimeFlags(cmd *cobra.Command, rf *refFlags) {
 	cmd.Flags().StringVar(&rf.format, "format", "",
 		"how to read each line's timestamp: auto (default), a builtin ("+
@@ -50,7 +49,7 @@ func addTimeFlags(cmd *cobra.Command, rf *refFlags) {
 		"Go reference layout for the regex 'time' group, or for the start of each line")
 }
 
-// timeFormat compiles --format/--time-layout. A nil format asks for detection.
+// timeFormat compiles --format/--time-layout
 func (rf *refFlags) timeFormat() (*timeparse.Format, error) {
 	return timeparse.Compile(rf.format, rf.layout)
 }

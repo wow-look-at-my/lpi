@@ -84,8 +84,7 @@ func removePendingCaptures(w io.Writer, db string, paths []string) {
 	}
 }
 
-// timeFormatNote names the stamp reader a digest used, so an autodetected
-// log says which flavor it was read as.
+// timeFormatNote names the stamp reader a digest
 func timeFormatNote(r *model.Run) string {
 	if r.TimeFormat == "" {
 		return ""

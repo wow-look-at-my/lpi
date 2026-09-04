@@ -85,7 +85,7 @@ type watcher struct {
 	jsonW      io.Writer
 	jsonStream bool
 	pending    []string // lines buffered until the time source is decided
-	// format pins the stamp reader; nil leaves the choice to detection.
+	// format pins the stamp reader; nil leaves the
 	format *timeparse.Format
 }
 
@@ -137,7 +137,7 @@ func (w *watcher) handleBatch(batch []string) {
 	defer w.mu.Unlock()
 	if w.feeder == nil {
 		w.pending = append(w.pending, batch...)
-		// A pinned format needs no sample, so the first batch settles it.
+		// A pinned format needs no sample, so the batch
 		if w.format != nil || len(w.pending) >= detectLines {
 			w.decideLocked()
 		}

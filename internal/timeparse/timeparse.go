@@ -43,8 +43,7 @@ func (f *Format) Name() string {
 	return kindNames[f.kind]
 }
 
-// Clone returns the same format with its rollover state reset, so one
-// compiled format can read several logs.
+// Clone returns the same format with its rollover
 func (f *Format) Clone() *Format {
 	if f == nil {
 		return nil
