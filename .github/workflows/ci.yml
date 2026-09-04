@@ -17,9 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Autorelease auto-provisions the project with an empty description, and
-      # description is settable only at create time. Creating it here first is
-      # what puts real text in the brew formula's desc and homepage.
+      # A buildhost description is settable only at project create, so autorelease's own auto-provision can never add one.
       - name: Ensure the buildhost project exists with its description
         uses: wow-look-at-my/buildhost/.github/actions/buildhost-create-project@master
         with:
