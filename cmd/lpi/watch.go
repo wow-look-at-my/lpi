@@ -46,6 +46,10 @@ wall clock is used. Stop with Ctrl-C to get a final summary.`,
 		if err != nil {
 			return err
 		}
+		format, err := watchOpts.rf.timeFormat()
+		if err != nil {
+			return err
+		}
 		ctx, cancel := newSignalContext()
 		defer cancel()
 		lines := make(chan string, 512)
@@ -57,6 +61,7 @@ wall clock is used. Stop with Ctrl-C to get a final summary.`,
 			est:        progress.NewEstimator(m),
 			r:          render.New(cmd.ErrOrStderr()),
 			jsonStream: watchOpts.jsonStream,
+			format:     format,
 		}
 		// NDJSON snapshots are coordinated like child
 		w.jsonW = w.r.Passthrough(cmd.OutOrStdout(), &w.mu)
@@ -80,6 +85,8 @@ type watcher struct {
 	jsonW      io.Writer
 	jsonStream bool
 	pending    []string // lines buffered until the time source is decided
+	// format pins the stamp reader; nil leaves the choice to detection.
+	format *timeparse.Format
 }
 
 // loop consumes line batches and ticks until the
@@ -130,7 +137,8 @@ func (w *watcher) handleBatch(batch []string) {
 	defer w.mu.Unlock()
 	if w.feeder == nil {
 		w.pending = append(w.pending, batch...)
-		if len(w.pending) >= detectLines {
+		// A pinned format needs no sample, so the first batch settles it.
+		if w.format != nil || len(w.pending) >= detectLines {
 			w.decideLocked()
 		}
 		return
@@ -142,7 +150,10 @@ func (w *watcher) handleBatch(batch []string) {
 
 // decideLocked picks the time source from the
 func (w *watcher) decideLocked() {
-	format := timeparse.Detect(w.pending)
+	format := w.format
+	if format == nil {
+		format = timeparse.Detect(w.pending)
+	}
 	w.feeder = &lineFeeder{est: w.est, format: format, wall: format == nil}
 	for _, ln := range w.pending {
 		w.feeder.feed(ln)
@@ -178,6 +189,7 @@ func (w *watcher) finish(cmd *cobra.Command) {
 
 func init() {
 	addRefFlags(watchCmd, &watchOpts.rf)
+	addTimeFlags(watchCmd, &watchOpts.rf)
 	watchCmd.Flags().BoolVar(&watchOpts.fromStart, "from-start", true,
 		"read the file's pre-existing content first")
 	watchCmd.Flags().DurationVar(&watchOpts.interval, "interval", tailer.DefaultInterval,

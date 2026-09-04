@@ -27,15 +27,48 @@ var kindNames = [numKinds]string{"iso8601", "golog", "syslog", "epoch", "dmesg",
 // Format parses timestamp flavor
 type Format struct {
 	kind      kind
+	custom    *custom
 	last      time.Time
 	dayOffset time.Duration
 }
 
 // Name returns a short identifier for the format
-func (f *Format) Name() string { return kindNames[f.kind] }
+func (f *Format) Name() string {
+	if f == nil {
+		return "none"
+	}
+	if f.custom != nil {
+		return f.custom.name
+	}
+	return kindNames[f.kind]
+}
+
+// Clone returns the same format with its rollover state reset, so one
+// compiled format can read several logs.
+func (f *Format) Clone() *Format {
+	if f == nil {
+		return nil
+	}
+	c := f.custom
+	if c != nil {
+		copied := *c
+		c = &copied
+	}
+	return &Format{kind: f.kind, custom: c}
+}
 
 // Parse extracts this format's timestamp from the
 func (f *Format) Parse(line string) (time.Time, bool) {
+	if f.custom != nil {
+		t, dated, ok := f.custom.parse(line)
+		switch {
+		case !ok:
+			return time.Time{}, false
+		case dated:
+			return t, true
+		}
+		return f.rollover(t), true
+	}
 	s, bracket := stripLead(line)
 	switch f.kind {
 	case kindISO:

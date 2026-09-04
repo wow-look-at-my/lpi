@@ -41,8 +41,12 @@ present, elapsed time and a pace-adjusted ETA come from them.`,
 			defer f.Close()
 			r = f
 		}
+		format, err := analyzeOpts.rf.timeFormat()
+		if err != nil {
+			return err
+		}
 		est := progress.NewEstimator(m)
-		if err := analyzeReader(r, est); err != nil {
+		if err := analyzeReader(r, est, format); err != nil {
 			return err
 		}
 		s := est.Snapshot()
@@ -55,13 +59,16 @@ present, elapsed time and a pace-adjusted ETA come from them.`,
 }
 
 // analyzeReader buffers the lines for timestamp
-func analyzeReader(r io.Reader, est *progress.Estimator) error {
+func analyzeReader(r io.Reader, est *progress.Estimator, format *timeparse.Format) error {
 	sc := linescan.NewScanner(r)
 	var sample []string
-	for len(sample) < detectLines && sc.Scan() {
+	for len(sample) < detectLines && format == nil && sc.Scan() {
 		sample = append(sample, sc.Text())
 	}
-	feeder := &lineFeeder{est: est, format: timeparse.Detect(sample)}
+	if format == nil {
+		format = timeparse.Detect(sample)
+	}
+	feeder := &lineFeeder{est: est, format: format}
 	for _, ln := range sample {
 		feeder.feed(ln)
 	}
@@ -73,6 +80,7 @@ func analyzeReader(r io.Reader, est *progress.Estimator) error {
 
 func init() {
 	addRefFlags(analyzeCmd, &analyzeOpts.rf)
+	addTimeFlags(analyzeCmd, &analyzeOpts.rf)
 	analyzeCmd.Flags().BoolVar(&analyzeOpts.json, "json", false,
 		"print a single JSON snapshot instead of the summary")
 	rootCmd.AddCommand(analyzeCmd)

@@ -42,15 +42,19 @@ recorded run, and once learned they are removed from pending/.`,
 				return err
 			}
 		}
+		format, err := learnOpts.rf.timeFormat()
+		if err != nil {
+			return err
+		}
 		out := cmd.OutOrStdout()
 		for _, path := range args {
-			run, err := model.DigestFile(path)
+			run, err := model.DigestFileWith(path, format.Clone())
 			if err != nil {
 				return fmt.Errorf("digest %s: %w", path, err)
 			}
 			m.AddRun(run)
-			fmt.Fprintf(out, "learned %s: %d lines, %s, %d unique fingerprints\n",
-				path, run.Lines, runDuration(run), len(run.Occ))
+			fmt.Fprintf(out, "learned %s: %d lines, %s%s, %d unique fingerprints\n",
+				path, run.Lines, runDuration(run), timeFormatNote(run), len(run.Occ))
 		}
 		dest := model.PathForKey(db, key)
 		if err := m.Save(dest); err != nil {
@@ -80,6 +84,15 @@ func removePendingCaptures(w io.Writer, db string, paths []string) {
 	}
 }
 
+// timeFormatNote names the stamp reader a digest used, so an autodetected
+// log says which flavor it was read as.
+func timeFormatNote(r *model.Run) string {
+	if r.TimeFormat == "" {
+		return ""
+	}
+	return " (" + r.TimeFormat + ")"
+}
+
 func runDuration(r *model.Run) string {
 	if !r.HasTimes {
 		return "no timestamps"
@@ -96,6 +109,7 @@ func modelDuration(m *model.Model) string {
 
 func init() {
 	addModelFlags(learnCmd, &learnOpts.rf)
+	addTimeFlags(learnCmd, &learnOpts.rf)
 	learnCmd.Flags().BoolVar(&learnOpts.replace, "replace", false,
 		"discard any existing runs under the key first")
 	rootCmd.AddCommand(learnCmd)
