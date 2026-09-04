@@ -28,7 +28,9 @@ type Run struct {
 	Lines    int           // nonempty lines digested
 	Duration time.Duration // if unknown
 	HasTimes bool
-	Occ      map[uint64][]Occurrence
+	// TimeFormat names the stamp reader the digest
+	TimeFormat string `json:",omitempty"`
+	Occ        map[uint64][]Occurrence
 }
 
 // rawOcc is line observation prior to fraction
@@ -110,6 +112,9 @@ func (d *Digester) Finish() (*Run, error) {
 		return nil, errors.New("model: need at least 2 nonempty log lines")
 	}
 	run := &Run{Source: d.source, Lines: d.count, Occ: make(map[uint64][]Occurrence, len(d.occ))}
+	if d.format != nil && d.haveT {
+		run.TimeFormat = d.format.Name()
+	}
 	var dur time.Duration
 	if d.haveT {
 		dur = d.prev.Sub(d.first)
@@ -173,7 +178,10 @@ func DigestReader(r io.Reader, source string, format *timeparse.Format) (*Run, e
 const detectLines = 300
 
 // DigestFile digests a log file into a Run
-func DigestFile(path string) (*Run, error) {
+func DigestFile(path string) (*Run, error) { return DigestFileWith(path, nil) }
+
+// DigestFileWith digests a log file with a
+func DigestFileWith(path string, format *timeparse.Format) (*Run, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -196,11 +204,14 @@ func DigestFile(path string) (*Run, error) {
 			return digestCapture(sc, path, label)
 		}
 		sample = append(sample, sc.Text())
-		for len(sample) < detectLines && sc.Scan() {
+		for len(sample) < detectLines && format == nil && sc.Scan() {
 			sample = append(sample, sc.Text())
 		}
 	}
-	d := NewDigester(path, timeparse.Detect(sample))
+	if format == nil {
+		format = timeparse.Detect(sample)
+	}
+	d := NewDigester(path, format)
 	for _, ln := range sample {
 		d.Line(ln)
 	}

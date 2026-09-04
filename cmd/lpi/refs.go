@@ -26,15 +26,32 @@ var tickInterval = 500 * time.Millisecond
 
 // refFlags holds the flags every estimating command
 type refFlags struct {
-	refs []string
-	key  string
-	db   string
+	refs   []string
+	key    string
+	db     string
+	format string
+	layout string
 }
 
 // addModelFlags registers --key and --db
 func addModelFlags(cmd *cobra.Command, rf *refFlags) {
 	cmd.Flags().StringVar(&rf.key, "key", "", "name of a learned model in the model database")
 	cmd.Flags().StringVar(&rf.db, "db", model.DefaultDir(), "model database directory")
+}
+
+// addTimeFlags registers the timestamp-reading
+func addTimeFlags(cmd *cobra.Command, rf *refFlags) {
+	cmd.Flags().StringVar(&rf.format, "format", "",
+		"how to read each line's timestamp: auto (default), a builtin ("+
+			strings.Join(timeparse.Names(), ", ")+"), or a regex with named groups ("+
+			strings.Join(timeparse.Groups(), ", ")+")")
+	cmd.Flags().StringVar(&rf.layout, "time-layout", "",
+		"Go reference layout for the regex 'time' group, or for the start of each line")
+}
+
+// timeFormat compiles --format/--time-layout
+func (rf *refFlags) timeFormat() (*timeparse.Format, error) {
+	return timeparse.Compile(rf.format, rf.layout)
 }
 
 // addRefFlags registers --ref on top of the model
@@ -62,8 +79,12 @@ func (rf *refFlags) resolve() (*model.Model, error) {
 	} else {
 		m = model.New("adhoc")
 	}
+	format, err := rf.timeFormat()
+	if err != nil {
+		return nil, err
+	}
 	for _, ref := range rf.refs {
-		run, err := model.DigestFile(ref)
+		run, err := model.DigestFileWith(ref, format.Clone())
 		if err != nil {
 			return nil, fmt.Errorf("digest %s: %w", ref, err)
 		}

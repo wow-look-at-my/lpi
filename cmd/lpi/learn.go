@@ -27,7 +27,14 @@ runs are evicted beyond ` + fmt.Sprint(model.MaxRuns) + `); --replace starts
 the key from scratch instead. Gzipped logs are handled transparently, as are
 the capture files a failed 'lpi run --learn' or 'lpi pipe --learn-key' keeps
 under <db>/pending/ -- they replay with the exact per-line times of the
-recorded run, and once learned they are removed from pending/.`,
+recorded run, and once learned they are removed from pending/.
+
+Timestamps are auto-detected and the reader used is reported per file. For
+stamps no builtin knows, --format takes a regex with named groups, e.g.
+--format '^\((?P<time>[^)]+)\)' --time-layout '02.01.2006 15h04m05s', or
+component groups such as year/month/day/hour/min/sec/frac/zone, or the
+whole-stamp groups epoch/epochms/epochns. Lines the regex misses keep the
+previous line's time, so a mix of stamped and unstamped lines is fine.`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		key := learnOpts.rf.key
@@ -42,15 +49,19 @@ recorded run, and once learned they are removed from pending/.`,
 				return err
 			}
 		}
+		format, err := learnOpts.rf.timeFormat()
+		if err != nil {
+			return err
+		}
 		out := cmd.OutOrStdout()
 		for _, path := range args {
-			run, err := model.DigestFile(path)
+			run, err := model.DigestFileWith(path, format.Clone())
 			if err != nil {
 				return fmt.Errorf("digest %s: %w", path, err)
 			}
 			m.AddRun(run)
-			fmt.Fprintf(out, "learned %s: %d lines, %s, %d unique fingerprints\n",
-				path, run.Lines, runDuration(run), len(run.Occ))
+			fmt.Fprintf(out, "learned %s: %d lines, %s%s, %d unique fingerprints\n",
+				path, run.Lines, runDuration(run), timeFormatNote(run), len(run.Occ))
 		}
 		dest := model.PathForKey(db, key)
 		if err := m.Save(dest); err != nil {
@@ -80,6 +91,14 @@ func removePendingCaptures(w io.Writer, db string, paths []string) {
 	}
 }
 
+// timeFormatNote names the stamp reader a digest
+func timeFormatNote(r *model.Run) string {
+	if r.TimeFormat == "" {
+		return ""
+	}
+	return " (" + r.TimeFormat + ")"
+}
+
 func runDuration(r *model.Run) string {
 	if !r.HasTimes {
 		return "no timestamps"
@@ -96,6 +115,7 @@ func modelDuration(m *model.Model) string {
 
 func init() {
 	addModelFlags(learnCmd, &learnOpts.rf)
+	addTimeFlags(learnCmd, &learnOpts.rf)
 	learnCmd.Flags().BoolVar(&learnOpts.replace, "replace", false,
 		"discard any existing runs under the key first")
 	rootCmd.AddCommand(learnCmd)

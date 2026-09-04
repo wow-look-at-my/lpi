@@ -1,0 +1,12 @@
+(04.03.2026 05h06m07s) configure: checking build system type
+(04.03.2026 05h06m11s) configure: checking for gcc
+a continuation line carrying no stamp of its own
+(04.03.2026 05h06m20s) configure: creating config.status
+(04.03.2026 05h07m02s) make: entering directory src
+(04.03.2026 05h07m05s) CC parser.o
+(04.03.2026 05h07m31s) CC lexer.o
+(04.03.2026 05h08m10s) CC main.o
+another unstamped line, wrapped from the compiler
+(04.03.2026 05h09m40s) LD myapp
+(04.03.2026 05h09m52s) make: leaving directory src
+(04.03.2026 05h10m00s) build finished

@@ -119,7 +119,8 @@ Reference:   108 units over 5m14s
 
 Timestamps are auto-detected (ISO-8601, `HH:MM:SS`, syslog, go log, epoch,
 dmesg); when present, elapsed time and a pace-adjusted ETA come from the
-log's own clock. `--json` prints one machine-readable snapshot instead.
+log's own clock. `--format` reads stamps the detector does not know (see
+below). `--json` prints one machine-readable snapshot instead.
 
 ### `lpi watch` -- follow a growing file
 
@@ -183,6 +184,30 @@ scratch. Models are stored in `$LPI_DB` if set, else
 command takes `--db DIR` to override. Model saves are atomic (temp file +
 rename), so a crash or full disk mid-save can never corrupt an existing
 model.
+
+### Preloading from logs with unusual timestamps
+
+Timestamps are auto-detected, and `lpi learn` says which reader it used
+(`... 3m53s (clock), ...`). When a log's stamps are none of the builtins,
+describe them with `--format` and, if needed, `--time-layout`:
+
+```sh
+# a regex whose 'time' group is read with a Go reference layout
+lpi learn --key odd --format '^\((?P<time>[^)]+)\)' \
+  --time-layout '02.01.2006 15h04m05s' build.log
+
+# component groups, when no single layout fits
+lpi learn --key web --format '^(?P<day>\d\d)/(?P<month>\w+)/(?P<year>\d{4}):(?P<hour>\d\d):(?P<min>\d\d):(?P<sec>\d\d) (?P<zone>[+-]\d{4})' access.log
+
+# a whole stamp in one group, and a builtin selected by name
+lpi learn --key svc --format '^(?P<epoch>\d+\.\d+)' service.log
+lpi learn --key old --format iso8601 legacy.log
+```
+
+Lines the regex misses keep the previous line's time, so a log that mixes
+stamped and unstamped lines still preloads with real timing. The same two
+flags work on `lpi analyze`, `lpi watch`, and any `--ref` log. Full group
+list and rules: [docs/DESIGN.md](docs/DESIGN.md).
 
 `lpi learn` (and `--ref`) also accepts the capture files a failed learning
 run keeps under `<db>/pending/` -- they are auto-detected by their header

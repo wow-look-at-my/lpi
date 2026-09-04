@@ -348,8 +348,12 @@ long lines. A final unterminated line is still yielded.
 
     type Format struct{ ... }            // stateful Parse; not thread-safe
     func (f *Format) Name() string
+    func (f *Format) Clone() *Format     // same reader, rollover state reset
     func (f *Format) Parse(line string) (t time.Time, ok bool)
     func Detect(lines []string) *Format
+    func Compile(spec, layout string) (*Format, error)  // nil = detect
+    func Names() []string                // builtin format names
+    func Groups() []string               // regex group names
 
 Detects and parses per-line timestamps of log files (live modes use the wall
 clock instead). `Detect` samples up to 300 lines and returns the best format
@@ -373,6 +377,37 @@ plus spaces, and a trailing `]`):
 Only differences between parsed times matter; date-less formats parse onto a
 fixed arbitrary base day. Lines that do not match return `ok == false` and the
 caller carries the previous time forward.
+
+#### User-specified formats
+
+`Compile(spec, layout)` builds the reader behind `--format`/`--time-layout`,
+so a log the detector cannot read still preloads with real times. An empty
+spec and no layout return `nil`, which means "detect". Otherwise:
+
+- a builtin name (`iso8601`, `golog`, `syslog`, `epoch`, `dmesg`, `clock`)
+  selects that parser; a layout alongside it is an error
+- a regex (optionally written `regex:<expr>`) is matched against each line,
+  and its named groups say how to read the stamp. A `time` group hands its
+  text to `layout` when one is given, else to the builtin parser that first
+  recognizes it -- that choice is remembered for the rest of the log
+- component groups build the stamp piecewise: `year` (two digits mean the
+  current century), `month` (number, abbreviation, or full name), `day`,
+  `hour`, `min`, `sec`, `frac`, `zone` (`Z`, `+hh:mm`, `+hhmm`, `+hh`, or an
+  IANA name), plus `epoch`, `epochms`, `epochns`, which carry a whole stamp
+- a layout with no regex parses the start of each line, widening the window
+  around the layout's own length because a layout renders narrower than it
+  parses
+
+A regex naming none of the known groups is rejected, so a typo fails loudly
+instead of silently reading nothing. A line the regex misses, or whose stamp
+will not parse, is treated exactly like an unstamped line: the digester
+carries the previous time forward, so a log that mixes stamped and unstamped
+lines still yields one clock. Component groups without a date land on the
+base day and get the same midnight rollover as the bare-clock builtin, and
+`Clone` resets that state so one compiled format can read several logs.
+
+`Run.TimeFormat` records the reader a digest actually used, which is what
+`lpi learn` prints after each file.
 
 ### internal/model
 
