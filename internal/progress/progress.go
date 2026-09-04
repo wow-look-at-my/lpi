@@ -24,6 +24,8 @@ type Snapshot struct {
 	ETA     time.Duration
 	ETAKind string  // "pace" | "ref-pace" | "none"
 	Pace    float64 // elapsed vs reference speed ratio; if unknown
+	// PaceApplied is the pace the ETA was actually
+	PaceApplied float64
 
 	MatchRate  float64
 	Confidence string // "high" | "medium" | "low" | "none"
@@ -146,8 +148,10 @@ func (e *Estimator) fillETA(s *Snapshot) {
 	switch {
 	case s.ElapsedKnown && s.Progress >= minPaceProgress && s.MatchedLines >= minPaceMatches && ref > 0:
 		s.Pace = s.Elapsed.Seconds() / (s.Progress * ref)
+		// A pace from a sliver of the run counts only in proportion to that sliver.
+		s.PaceApplied = 1 + (s.Pace-1)*s.Progress
 		s.ETAKind = "pace"
-		s.ETA = time.Duration((1 - s.Progress) * ref * s.Pace * float64(time.Second))
+		s.ETA = time.Duration((1 - s.Progress) * ref * s.PaceApplied * float64(time.Second))
 	case !s.ElapsedKnown && ref > 0 && s.Progress >= minRefPaceProgress:
 		s.ETAKind = "ref-pace"
 		s.ETA = time.Duration((1 - s.Progress) * ref * float64(time.Second))

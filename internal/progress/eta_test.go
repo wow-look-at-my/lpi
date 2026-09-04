@@ -31,8 +31,33 @@ func TestETAPaceMath(t *testing.T) {
 
 	require.Equal(t, "pace", s.ETAKind)
 	assert.InDelta(t, 2.0, s.Pace, 1e-3, "running at half the reference speed")
-	// Remaining of a reference at speed
-	assert.InDelta(t, 120.0, s.ETA.Seconds(), 0.1)
+	// The measured pace is shrunk toward the reference by the progress seen.
+	assert.InDelta(t, 1+5.0/11, s.PaceApplied, 1e-3)
+	assert.InDelta(t, (1-5.0/11)*110*(1+5.0/11), s.ETA.Seconds(), 0.1)
+	assert.Less(t, s.ETA.Seconds(), (1-5.0/11)*110*2,
+		"a pace measured over half a run never rescales the whole remainder")
+}
+
+func TestETAPaceShrinksWithProgress(t *testing.T) {
+	// A slow start says little about the rest, so it barely moves the ETA.
+	e := paceEstimator(t)
+	for i, ln := range steps(12)[:6] {
+		e.Observe(ln, wallBase.Add(time.Duration(i)*20*time.Second))
+	}
+	early := e.Snapshot()
+
+	late := paceEstimator(t)
+	lines := steps(12)
+	for i, ln := range lines[:11] {
+		late.Observe(ln, wallBase.Add(time.Duration(i)*20*time.Second))
+	}
+	deep := late.Snapshot()
+
+	assert.InDelta(t, 2.0, early.Pace, 1e-3)
+	assert.InDelta(t, 2.0, deep.Pace, 1e-3)
+	assert.Greater(t, deep.PaceApplied, early.PaceApplied,
+		"the same measured pace counts for more once more of the run backs it")
+	assert.Less(t, early.PaceApplied, early.Pace)
 }
 
 func TestETAPaceAtCompletionIsZero(t *testing.T) {

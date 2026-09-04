@@ -46,6 +46,9 @@ internal/
                 capture.go: durable capture files for
                 learning runs (written under <db>/pending/, sniffed by
                 DigestFile via the "#lpi-capture v1" header)
+  eval/         backtesting: replays a complete log against a model and
+                scores every estimate against the log's own truth
+                (eval.go), plus the table/JSON scorecard (report.go)
   progress/     the live estimator: occurrence matching -> Snapshot;
                 autofit.go: the Chooser that fits live output against every
                 stored model (auto mode's lock/switch/merge decisions)
@@ -75,14 +78,22 @@ testdata/demo/         two complete fake cmake builds + a ~55% partial run,
   median across runs; occurrence fractions are averaged; weights
   renormalized to 1.
 - ETA scales the remaining reference time by the observed pace (elapsed vs
-  matched reference time); with no elapsed clock it assumes reference pace;
-  otherwise no ETA. Confidence = live match rate (0.9/0.6 thresholds).
+  matched reference time), shrunk toward the reference by the progress behind
+  it: `PaceApplied = 1 + (Pace-1)*Progress`, so a local early pace cannot
+  rescale a remainder it says nothing about. With no elapsed clock it assumes
+  reference pace; otherwise no ETA. Confidence = live match rate (0.9/0.6).
 
 ## Key CLI behaviors
 
 - `progress.Estimator` is NOT concurrency-safe: watch/run wrap it (and the
   renderer) in a mutex; run/pipe passthrough writes share that mutex via
   render's Passthrough writers.
+- `lpi eval LOG...` is the harness: it digests each log, replays it through
+  the estimator (model.ReplayFile), and scores every estimate against the
+  log's own truth. Several logs are scored leave-one-out; a lone log is
+  self-fit and says so; `--key` scores against a stored model, `--learn`
+  ingests afterwards, `--detail`/`--json` widen the report. Depth:
+  docs/DESIGN.md, "internal/eval".
 - Stamp reading is pinnable: learn/analyze/watch (and any `--ref` log) take
   `--format` (auto, a builtin name, or a regex with named groups) plus
   `--time-layout`; nil format means detect. A missed line carries the

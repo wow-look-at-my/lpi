@@ -73,10 +73,23 @@ With `Progress` the time-weighted progress and `RefDuration` the reference run
 duration:
 
 - pace = `elapsed_current / (Progress * RefDuration)`
-- ETA = `(1 - Progress) * RefDuration * pace`, kind `"pace"`
+- paceApplied = `1 + (pace - 1) * Progress`
+- ETA = `(1 - Progress) * RefDuration * paceApplied`, kind `"pace"`
 
 This applies only when elapsed time is known, `Progress >= 0.02`, matched
 lines >= 5, and `RefDuration > 0`.
+
+`pace` is measured over the part of the run seen so far, so applying it whole
+extrapolates a local speed over a remainder it says little about: a run that
+opens slowly and then catches up reported an ETA a third too long for its
+first half. `paceApplied` shrinks the correction toward the reference by the
+progress standing behind it, which is the pace ETA blended with the
+`"ref-pace"` ETA at weight `Progress`. At the end of a run the two agree, so
+only the early, thinly-evidenced ETAs move. On a 400-line run whose first
+quarter took 2.5x the reference pace, the mean ETA error across the deciles
+falls from 90% of the time actually left to 27%; on two near-identical runs it
+does not move. `Snapshot.Pace` still reports the measured pace -- what the run
+is really doing -- and `Snapshot.PaceApplied` reports what the ETA used.
 
 Fallback when elapsed is unknown but `RefDuration > 0` and
 `Progress >= 0.001`: ETA = `(1 - Progress) * RefDuration`, kind `"ref-pace"`.
@@ -429,6 +442,8 @@ base day and get the same midnight rollover as the bare-clock builtin, and
     func (d *Digester) Finish() (*Run, error) // error if < 2 nonempty lines
     func DigestReader(r io.Reader, source string, format *timeparse.Format) (*Run, error)
     func DigestFile(path string) (*Run, error)
+    func DigestFileWith(path string, format *timeparse.Format) (*Run, error)
+    func ReplayFile(path string, format *timeparse.Format, fn func(text string, at time.Time)) error
     type Model struct {
         Key         string
         Runs        []*Run
@@ -525,7 +540,8 @@ and appends `.lpi`.
         RefDuration  time.Duration
         ETA          time.Duration
         ETAKind      string  // "pace" | "ref-pace" | "none"
-        Pace         float64 // 0 if unknown
+        Pace         float64 // measured; 0 if unknown
+        PaceApplied  float64 // shrunk pace the ETA used; 0 if unknown
         MatchRate    float64
         Confidence   string  // "high" | "medium" | "low" | "none"
         Identifying  bool    // set by the Chooser pre-lock; zero for Estimators
@@ -561,6 +577,36 @@ is a valid input: every line is novel, `Progress`/`UnitsPct`/`MatchRate`/
 `Pace` stay 0, `ETAKind` and `Confidence` stay `"none"`, and no snapshot
 field is ever NaN or Inf (all divisions are guarded), so the JSON output
 stays well-formed.
+
+### internal/eval
+
+    type Target struct{ Path string; Run *model.Run }
+    type Point struct{ Line int; Truth, Pred float64; ETA, TrueLeft time.Duration; ETAKind string; Pace float64; Elapsed time.Duration }
+    type Result struct{ ... } // per-log scores: MeanAbsErr, MedAbsErr, P90AbsErr, MaxAbsErr, WorstAt, Bias, ETAMeanRelErr, Checkpoints
+    type Overall struct{ ... } // suite averages
+    func LeaveOneOut(targets []Target, format *timeparse.Format) ([]*Result, error)
+    func Against(m *model.Model, targets []Target, format *timeparse.Format) ([]*Result, error)
+    func Score(m *model.Model, t Target, format *timeparse.Format) (*Result, error)
+    func Aggregate(rs []*Result) Overall
+    func Grade(mae float64) string // "excellent" | "good" | "rough" | "poor"
+    func Report(w io.Writer, rs []*Result, detail bool)
+    func JSON(r *Result) JSONResult
+    func Verdict(o Overall) string
+
+`Score` replays a complete log through a `progress.Estimator` with
+`model.ReplayFile`, mirroring the digester's effective clock (carry-forward
+for an unstamped line, monotonic clamp, empty-normalized lines skipped) so the
+replay sees exactly the times the digest was built from. At every counted line
+it compares the estimate with the truth the log itself carries: its share of
+the run's own clock when the log is timed, else its share of the line count.
+The signed error feeds mean, median, p90, max and bias; the ETA feeds a mean
+relative error against the time really left. `Checkpoints` keeps the first
+estimate at or past each tenth of the run, plus a final row.
+
+`LeaveOneOut` scores each target against a model built from the others, which
+is the only honest read on an unseen run. A lone target is scored against
+itself and marked `SelfFit`, because that flatters the result. `Against`
+scores holdout logs against an already-stored model.
 
 ### internal/tailer
 

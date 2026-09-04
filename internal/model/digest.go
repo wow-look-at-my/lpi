@@ -182,9 +182,38 @@ func DigestFile(path string) (*Run, error) { return DigestFileWith(path, nil) }
 
 // DigestFileWith digests a log file with a
 func DigestFileWith(path string, format *timeparse.Format) (*Run, error) {
-	f, err := os.Open(path)
+	var d *Digester
+	label, err := readFile(path, format, func(used *timeparse.Format, text string, at time.Time) {
+		if d == nil {
+			d = NewDigester(path, used)
+		}
+		d.LineAt(text, at)
+	})
 	if err != nil {
 		return nil, err
+	}
+	if d == nil {
+		return nil, errors.New("model: need at least 2 nonempty log lines")
+	}
+	if label != "" {
+		d.source = label
+	}
+	return d.Finish()
+}
+
+// ReplayFile hands every line of path to fn, with
+func ReplayFile(path string, format *timeparse.Format, fn func(text string, at time.Time)) error {
+	_, err := readFile(path, format, func(_ *timeparse.Format, text string, at time.Time) {
+		fn(text, at)
+	})
+	return err
+}
+
+// readFile is the reader behind digesting and replay, so a log is opened,
+func readFile(path string, format *timeparse.Format, fn func(*timeparse.Format, string, time.Time)) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
 	}
 	defer f.Close()
 	br := bufio.NewReaderSize(f, 64*1024)
@@ -192,7 +221,7 @@ func DigestFileWith(path string, format *timeparse.Format) (*Run, error) {
 	if magic, perr := br.Peek(2); perr == nil && magic[0] == 0x1f && magic[1] == 0x8b {
 		gz, gerr := gzip.NewReader(br)
 		if gerr != nil {
-			return nil, gerr
+			return "", gerr
 		}
 		defer gz.Close()
 		r = gz
@@ -201,7 +230,11 @@ func DigestFileWith(path string, format *timeparse.Format) (*Run, error) {
 	var sample []string
 	if sc.Scan() {
 		if label, ok := parseCaptureHeader(sc.Text()); ok {
-			return digestCapture(sc, path, label)
+			for sc.Scan() {
+				text, at := parseCaptureRecord(sc.Text())
+				fn(nil, text, at)
+			}
+			return label, sc.Err()
 		}
 		sample = append(sample, sc.Text())
 		for len(sample) < detectLines && format == nil && sc.Scan() {
@@ -211,32 +244,22 @@ func DigestFileWith(path string, format *timeparse.Format) (*Run, error) {
 	if format == nil {
 		format = timeparse.Detect(sample)
 	}
-	d := NewDigester(path, format)
+	stamp := func(text string) time.Time {
+		if format == nil {
+			return time.Time{}
+		}
+		t, ok := format.Parse(text)
+		if !ok {
+			return time.Time{}
+		}
+		return t
+	}
 	for _, ln := range sample {
-		d.Line(ln)
+		fn(format, ln, stamp(ln))
 	}
 	for sc.Scan() {
-		d.Line(sc.Text())
+		text := sc.Text()
+		fn(format, text, stamp(text))
 	}
-	if err := sc.Err(); err != nil {
-		return nil, err
-	}
-	return d.Finish()
-}
-
-// digestCapture digests the records following a
-func digestCapture(sc *linescan.Scanner, path, label string) (*Run, error) {
-	source := path
-	if label != "" {
-		source = label
-	}
-	d := NewDigester(source, nil)
-	for sc.Scan() {
-		text, at := parseCaptureRecord(sc.Text())
-		d.LineAt(text, at)
-	}
-	if err := sc.Err(); err != nil {
-		return nil, err
-	}
-	return d.Finish()
+	return "", sc.Err()
 }
