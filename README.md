@@ -200,6 +200,43 @@ command takes `--db DIR` to override. Model saves are atomic (temp file +
 rename), so a crash or full disk mid-save can never corrupt an existing
 model.
 
+### `lpi eval` -- how good are the guesses, really?
+
+Hand it complete logs of a task and it replays them, grading the estimates it
+would have given while each one was still running. With several logs each is
+scored against a model built from the others, so nothing is ever graded
+against itself:
+
+```sh
+lpi eval build1.log build2.log build3.log
+```
+
+```
+log                         lines  duration  err avg  err p90  err max   eta err   match
+testdata/demo/build1.log      106     5m09s     1.6%     3.0%     3.9%       11%     99%
+testdata/demo/build2.log      107     5m14s     1.2%     2.7%     3.9%        4%     98%
+all                                             1.4%              3.9%        7%     99%
+
+verdict: excellent -- progress is off by 1.4% on average, and the ETA by 7% of the time actually left.
+```
+
+`err` is how far the reported percentage sat from the truth the log itself
+records -- its own clock, or its line count when it carries no timestamps.
+`--detail` prints what lpi would have said at each tenth of the run, next to
+what was really true at that moment:
+
+```
+      true     said    error       eta true left    pace
+       11%     9.9%    -1.1%     4m46s     4m35s   1.10x
+       51%    48.1%    -3.4%     2m47s     2m30s   1.05x
+       99%    97.1%    -2.2%        9s        2s   1.01x
+```
+
+`--key NAME` scores the logs against a model you already learned (a real
+holdout), `--learn` adds them to that key once the scoring is done, and
+`--json` prints every number for a script to read. Without `--learn`, eval
+writes nothing to the database.
+
 ### Preloading from logs with unusual timestamps
 
 Timestamps are auto-detected, and `lpi learn` says which reader it used
@@ -273,7 +310,10 @@ up, so anything there is recoverable data.
    take the upper median across runs (so one aborted or incremental run
    cannot drop lines), occurrence times are averaged, weights renormalized.
 5. **ETA.** pace = elapsed / (progress x reference-duration); ETA =
-   remaining-weight x reference-duration x pace. Without usable timestamps,
+   remaining-weight x reference-duration x pace, with the pace correction
+   shrunk toward the reference in proportion to the progress behind it -- a
+   slow opening minute is a poor guide to the hour after it, and left
+   un-shrunk it stretched early ETAs by a third. Without usable timestamps,
    lines weigh equally and the ETA falls back to assuming reference pace (or
    is omitted).
 
