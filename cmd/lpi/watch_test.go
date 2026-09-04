@@ -15,7 +15,7 @@ import (
 	"github.com/wow-look-at-my/log-progress-indicator/internal/render"
 )
 
-// shortTicks shrinks the live-mode timing seams for a test.
+// shortTicks shrinks the live-mode timing seams for
 func shortTicks(t *testing.T) {
 	t.Helper()
 	oldTick, oldPlain := tickInterval, render.PlainInterval
@@ -24,7 +24,7 @@ func shortTicks(t *testing.T) {
 	t.Cleanup(func() { tickInterval, render.PlainInterval = oldTick, oldPlain })
 }
 
-// cancelWatchAfter replaces the signal context with one cancelled after d.
+// cancelWatchAfter replaces the signal context with
 func cancelWatchAfter(t *testing.T, d time.Duration) {
 	t.Helper()
 	old := newSignalContext
@@ -40,6 +40,7 @@ func cancelWatchAfter(t *testing.T, d time.Duration) {
 }
 
 func TestWatchTimestampedFile(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	cancelWatchAfter(t, 400*time.Millisecond)
@@ -62,15 +63,14 @@ func TestWatchTimestampedFile(t *testing.T) {
 		"--interval", "5ms", "--json-stream", path)
 	require.NoError(t, err)
 
-	// Live status lines and the final summary land on stderr.
+	// Live status lines and the final summary land on
 	assert.Contains(t, errOut, "units ")
 	assert.Contains(t, errOut, "Progress:")
 	assert.Contains(t, errOut, "Confidence:  high")
-	// The file's own timestamps are the time source: elapsed comes from the
-	// log clock, minutes long, not from the milliseconds of wall time.
+	// The file's own timestamps are the time source
 	assert.Contains(t, errOut, "Elapsed:     3m")
 
-	// NDJSON snapshots on stdout, one per repaint, monotonically increasing.
+	// NDJSON snapshots on stdout, per repaint
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 	require.NotEmpty(t, lines)
 	first := parseJSONLine(t, lines[0])
@@ -80,12 +80,9 @@ func TestWatchTimestampedFile(t *testing.T) {
 	assert.Equal(t, "high", last["confidence"])
 }
 
-// TestWatchJSONStreamTTYKeepsStreamsClean covers watch's own out-of-band
-// stream during active rendering: with both stdout and stderr on a TTY, the
-// NDJSON snapshots are coordinated with the status line (erase before,
-// repaint after), so the JSON stream stays pure and no terminal line mixes
-// status text with a snapshot.
+// TestWatchJSONStreamTTYKeepsStreamsClean covers
 func TestWatchJSONStreamTTYKeepsStreamsClean(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	forceTTY(t, true)
@@ -108,11 +105,11 @@ func TestWatchJSONStreamTTYKeepsStreamsClean(t *testing.T) {
 }
 
 func TestWatchWallClockMode(t *testing.T) {
+	t.Serial()
 	shortTicks(t)
 	cancelWatchAfter(t, 300*time.Millisecond)
 
-	// A reference and a live file with no timestamps at all: watch commits
-	// to wall-clock mode and drives Tick.
+	// A reference and a live file with no timestamps at
 	dir := t.TempDir()
 	ref := filepath.Join(dir, "ref.log")
 	var b strings.Builder
@@ -121,7 +118,7 @@ func TestWatchWallClockMode(t *testing.T) {
 	}
 	require.NoError(t, os.WriteFile(ref, []byte(b.String()), 0o644))
 	live := filepath.Join(dir, "live.log")
-	require.NoError(t, os.WriteFile(live, []byte(b.String()), 0o644)) // >= 300 lines pre-existing
+	require.NoError(t, os.WriteFile(live, []byte(b.String()), 0o644)) // >= lines pre-existing
 
 	_, errOut, err := execLpi(t, nil, "watch", "--ref", ref, "--interval", "5ms", live)
 	require.NoError(t, err)
@@ -131,6 +128,7 @@ func TestWatchWallClockMode(t *testing.T) {
 }
 
 func TestWatchFromStartFalseSkipsHistory(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	cancelWatchAfter(t, 250*time.Millisecond)
@@ -147,6 +145,7 @@ func TestWatchFromStartFalseSkipsHistory(t *testing.T) {
 }
 
 func TestWatchHardError(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	_, _, err := execLpi(t, nil, "watch", "--db", db, "--key", "demo", "--interval", "5ms", t.TempDir())
@@ -154,6 +153,7 @@ func TestWatchHardError(t *testing.T) {
 }
 
 func TestWatchNoReference(t *testing.T) {
+	t.Serial()
 	_, _, err := execLpi(t, nil, "watch", "somefile.log")
 	require.ErrorContains(t, err, "no reference given")
 }

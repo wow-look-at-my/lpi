@@ -1,8 +1,4 @@
-// Package render turns progress snapshots into terminal output: an in-place
-// status line on TTYs, throttled plain lines otherwise, and a multi-line
-// summary block. Passthrough coordinates child output with the status line
-// so the two never share a terminal line; Message and Break extend the same
-// discipline to the caller's own out-of-band lines and to abandoned renders.
+// Package render turns progress snapshots into
 package render
 
 import (
@@ -17,12 +13,10 @@ import (
 	"github.com/wow-look-at-my/log-progress-indicator/internal/progress"
 )
 
-// PlainInterval is the minimum time between non-TTY status lines (a whole
-// percent of progress also forces one). It is a var so tests can shorten it.
+// PlainInterval is the minimum time between non-TTY
 var PlainInterval = 2 * time.Second
 
-// IsTTY reports whether w is an interactive terminal. It is a var so tests
-// can force either mode.
+// IsTTY reports whether w is an interactive terminal
 var IsTTY = func(w io.Writer) bool {
 	f, ok := w.(*os.File)
 	if !ok {
@@ -32,31 +26,27 @@ var IsTTY = func(w io.Writer) bool {
 	return err == nil && st.Mode()&os.ModeCharDevice != 0
 }
 
-// barWidth is the interior width of the status-line progress bar.
+// barWidth is the interior width of the status-line
 const barWidth = 22
 
-// Renderer writes live status lines to one writer. It is not safe for
-// concurrent use; callers serialize Update/Close/Message/Break (and writes
-// through Passthrough share the same mutex).
+// Renderer writes live status lines to writer
 type Renderer struct {
 	w         io.Writer
 	tty       bool
 	started   bool
 	lastPlain time.Time
 	lastPct   int
-	last      string // last painted TTY status, repainted after passthrough writes
+	last      string // last painted TTY status, repainted after
 	painted   bool   // TTY: a status line is currently on the terminal
-	midline   bool   // passthrough bytes left the display cursor inside a partial child line
+	midline   bool   // passthrough bytes left the display cursor inside
 }
 
-// New returns a Renderer for w, choosing TTY or plain mode via IsTTY.
+// New returns a Renderer for w, choosing TTY or
 func New(w io.Writer) *Renderer {
 	return &Renderer{w: w, tty: IsTTY(w), lastPct: -1}
 }
 
-// Update renders one live snapshot. On a TTY the status line is repainted in
-// place; otherwise a line is printed for the first update, then at most every
-// PlainInterval or when the whole progress percent changes.
+// Update renders live snapshot
 func (r *Renderer) Update(s progress.Snapshot) {
 	if r.tty {
 		r.paint(StatusLine(s))
@@ -73,7 +63,7 @@ func (r *Renderer) Update(s progress.Snapshot) {
 	r.printPlain(StatusLine(s))
 }
 
-// Close prints the final status line, ending the in-place repaint on a TTY.
+// Close prints the final status line, ending the
 func (r *Renderer) Close(final progress.Snapshot) {
 	if r.tty {
 		r.paint(StatusLine(final))
@@ -85,14 +75,7 @@ func (r *Renderer) Close(final progress.Snapshot) {
 	r.printPlain(StatusLine(final))
 }
 
-// Message writes one of the caller's own out-of-band lines (a warning, an
-// interrupt notice, recovery instructions) with the same never-share-a-line
-// discipline as the status: a painted TTY status is erased first, a partial
-// child passthrough line is terminated, and the message ends with a newline.
-// The status is not repainted -- the next Update (or the next complete
-// passthrough line) brings it back -- so a message printed just before exit
-// leaves the terminal on a clean line. Callers serialize Message with
-// Update/Close and passthrough writes (the same mutex convention).
+// Message writes of the caller's own out-of-band
 func (r *Renderer) Message(msg string) {
 	if r.painted {
 		fmt.Fprint(r.w, "\r\x1b[K")
@@ -105,11 +88,7 @@ func (r *Renderer) Message(msg string) {
 	fmt.Fprintf(r.w, "%s\n", msg)
 }
 
-// Break ends any in-progress terminal line -- a painted TTY status or a
-// partial child passthrough line -- so following output (e.g. an error
-// report printed by the CLI layer) starts on a fresh line. Unlike Close it
-// paints no final status; it is for paths that abandon rendering. The
-// painted status stays visible in scrollback, committed by the newline.
+// Break ends any in-progress terminal line -- a
 func (r *Renderer) Break() {
 	if r.painted || r.midline {
 		fmt.Fprint(r.w, "\n")
@@ -119,10 +98,7 @@ func (r *Renderer) Break() {
 	r.last = ""
 }
 
-// paint draws line as the current TTY status. A pending status is repainted
-// in place (carriage return plus erase-to-EOL); when passthrough bytes left
-// the cursor inside a partial child line, the status moves to a fresh line
-// first -- painting in place would glue it onto the child's text.
+// paint draws line as the current TTY status
 func (r *Renderer) paint(line string) {
 	if r.midline {
 		fmt.Fprint(r.w, "\n")
@@ -133,9 +109,7 @@ func (r *Renderer) paint(line string) {
 	r.painted = true
 }
 
-// printPlain writes one complete status line in plain mode. A status print
-// always owns a whole line: it ends with a newline, and a partial child line
-// pending on the same stream is terminated first.
+// printPlain writes complete status line in plain
 func (r *Renderer) printPlain(line string) {
 	if r.midline {
 		fmt.Fprint(r.w, "\n")
@@ -144,16 +118,7 @@ func (r *Renderer) printPlain(line string) {
 	fmt.Fprintf(r.w, "%s\n", line)
 }
 
-// Passthrough wraps dst so that child output forwarded through it never
-// shares a terminal line with the status line: a pending TTY status is
-// erased before the child's bytes and repainted after them, and bytes ending
-// mid-line mark the display so the next status starts on a fresh line
-// instead of the child's partial one. The child's bytes themselves reach dst
-// untouched. Writes lock mu -- the same mutex the caller uses to serialize
-// Update/Close -- so passthrough and rendering never interleave. dst is
-// returned unwrapped (and stays lock-free) when its output cannot collide
-// with the status line: neither the renderer's own writer nor a TTY shown
-// alongside a TTY status.
+// Passthrough wraps dst so that child output
 func (r *Renderer) Passthrough(dst io.Writer, mu *sync.Mutex) io.Writer {
 	if !sameWriter(dst, r.w) && !(r.tty && IsTTY(dst)) {
 		return dst
@@ -161,15 +126,12 @@ func (r *Renderer) Passthrough(dst io.Writer, mu *sync.Mutex) io.Writer {
 	return &passthroughWriter{r: r, dst: dst, mu: mu}
 }
 
-// sameWriter reports whether a and b are the same writer. An uncomparable
-// dynamic type cannot be tested with ==, so it reports false rather than
-// panicking.
+// sameWriter reports whether a and b are the same
 func sameWriter(a, b io.Writer) bool {
 	return reflect.TypeOf(a).Comparable() && a == b
 }
 
-// passthroughWriter is the coordinated writer built by Passthrough. Erase
-// and repaint go to the renderer's own stream; p goes to dst byte-for-byte.
+// passthroughWriter is the coordinated writer built
 type passthroughWriter struct {
 	r   *Renderer
 	dst io.Writer
@@ -191,16 +153,14 @@ func (pw *passthroughWriter) Write(p []byte) (int, error) {
 	if n > 0 {
 		r.midline = p[n-1] != '\n'
 	}
-	// Repainting onto a partial child line would glue the status to it, so
-	// that case waits for the next Update (which starts on a fresh line).
+	// Repainting onto a partial child line would glue
 	if err == nil && r.tty && !r.midline && r.last != "" {
 		r.paint(r.last)
 	}
 	return n, err
 }
 
-// Bar renders a "[=====>    ]" progress bar with the given interior width.
-// frac is clamped to 0..1.
+// Bar renders a "[=====> ]" progress bar with the
 func Bar(frac float64, width int) string {
 	if width <= 0 {
 		return "[]"
@@ -218,30 +178,10 @@ func Bar(frac float64, width int) string {
 	return "[" + strings.Repeat("=", filled) + ">" + strings.Repeat(" ", width-filled-1) + "]"
 }
 
-// statusLabelMax caps the ref-label segment of the status line; pattern
-// labels are command lines and can be arbitrarily long.
+// statusLabelMax caps the ref-label segment of the
 const statusLabelMax = 28
 
-// StatusLine renders a single-line live status, e.g.
-//
-//	[========>             ] 38.4%  units 2451/5948 (41.2%)  elapsed 2m14s  eta ~3m35s  pace 1.07x  match 97%
-//
-// The elapsed segment is omitted when elapsed time is unknown, the eta
-// segment when there is no ETA, and the pace segment when pace is 0. A
-// snapshot from a locked pattern chooser (Label set) gains a trailing
-// "ref <label>" segment, the label truncated to statusLabelMax bytes.
-// While the chooser is still deciding (Identifying set) there is nothing
-// to draw a bar against yet, so an identifying status is shown, e.g.
-//
-//	identifying pattern  lines 42  elapsed 3s
-//
-// Against an empty reference model (units total 0: a live-learning run
-// recording the first baseline) the bar would be meaningless, so a
-// recording status is shown instead, e.g.
-//
-//	recording baseline  lines 1234  elapsed 2m14s
-//
-// in both cases with the elapsed segment omitted when unknown.
+// StatusLine renders a single-line live status, e.g
 func StatusLine(s progress.Snapshot) string {
 	if s.Identifying {
 		parts := []string{"identifying pattern", fmt.Sprintf("lines %d", s.CurrentLines)}
@@ -277,8 +217,7 @@ func StatusLine(s progress.Snapshot) string {
 	return strings.Join(parts, "  ")
 }
 
-// truncLabel caps a pattern label at max bytes, appending "..." when cut
-// (labels are command lines: ASCII in practice, so byte truncation is fine).
+// truncLabel caps a pattern label at max bytes
 func truncLabel(s string, max int) string {
 	if len(s) <= max {
 		return s
@@ -286,11 +225,7 @@ func truncLabel(s string, max int) string {
 	return s[:max] + "..."
 }
 
-// Summary renders the multi-line, aligned summary block. It ends with a
-// newline. Against an empty reference model there is nothing to estimate,
-// so a short block notes that the run was recorded as the baseline (line
-// count and elapsed time) instead. A snapshot carrying a pattern label
-// (auto mode, locked) gains a final Pattern row naming it.
+// Summary renders the multi-line, aligned summary
 func Summary(s progress.Snapshot) string {
 	var b strings.Builder
 	row := func(key, val string) {
@@ -340,8 +275,7 @@ func progressBasis(s progress.Snapshot) string {
 	return "by line position"
 }
 
-// Duration formats d rounded to seconds: sub-minute as "47s", sub-hour as
-// "12m34s", and longer as "1h02m".
+// Duration formats d rounded to seconds: sub-minute
 func Duration(d time.Duration) string {
 	if d < 0 {
 		d = 0

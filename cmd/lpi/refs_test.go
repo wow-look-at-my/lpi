@@ -13,11 +13,9 @@ import (
 	"github.com/wow-look-at-my/log-progress-indicator/internal/progress"
 )
 
-// TestJSONSnapshotEmptyModel proves the baseline-recording state survives
-// the JSON path intact: encoding/json rejects NaN and Inf outright, so a
-// successful write IS the no-NaN guarantee, and the decoded fields pin the
-// documented empty-model snapshot.
+// TestJSONSnapshotEmptyModel proves the
 func TestJSONSnapshotEmptyModel(t *testing.T) {
+	t.Serial()
 	est := progress.NewEstimator(model.New("empty"))
 	base := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
 	est.Observe("first baseline line", base)

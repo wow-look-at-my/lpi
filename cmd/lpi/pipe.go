@@ -88,11 +88,7 @@ from exit code 0.`,
 			defer stop()
 		}
 
-		// The tee sits at the reader: every byte the line scanner consumes
-		// has already been forwarded, so passthrough stays byte-faithful
-		// even for overlong or binary lines. The renderer's Passthrough
-		// keeps the status line off the forwarded bytes' terminal lines
-		// when the two streams share a terminal.
+		// The tee sits at the reader: every byte the line
 		out := cmd.OutOrStdout()
 		if r != nil {
 			out = r.Passthrough(out, &st.mu)
@@ -102,9 +98,7 @@ from exit code 0.`,
 			now := time.Now()
 			st.mu.Lock()
 			if st.interrupted {
-				// The handler already reported and exited; only a stubbed
-				// osExit (tests) continues here. Keep the passthrough alive
-				// (the tee already forwarded the bytes) but stop estimating.
+				// The handler already reported and exited; only a
 				st.mu.Unlock()
 				continue
 			}
@@ -124,10 +118,7 @@ from exit code 0.`,
 			st.mu.Unlock()
 		}
 
-		// Commit to the normal completion path: a signal from here on is
-		// ignored by the handler (the stream is already complete, and the
-		// save is atomic), and an earlier interrupt skips learning -- the
-		// truncated stream must never be merged into the model.
+		// Commit to the normal completion path: a signal
 		st.mu.Lock()
 		if st.interrupted {
 			st.mu.Unlock()
@@ -137,9 +128,7 @@ from exit code 0.`,
 		st.mu.Unlock()
 
 		if err := sc.Err(); err != nil {
-			// Rendering is abandoned, not closed: end any painted status or
-			// partial passthrough line so the recovery lines and the error
-			// report start fresh.
+			// Rendering is abandoned, not closed: end any
 			if r != nil {
 				r.Break()
 			}
@@ -161,7 +150,7 @@ from exit code 0.`,
 		}
 		run, err := dig.Finish()
 		if err != nil {
-			// The only Finish failure is <2 nonempty lines: nothing recoverable.
+			// The only Finish failure is nonempty lines
 			capture.Discard()
 			return fmt.Errorf("run not learned: %w", err)
 		}
@@ -174,23 +163,14 @@ from exit code 0.`,
 	},
 }
 
-// pipeLearnState coordinates the scan loop, the EOF learning path, and the
-// interrupt handler of one learning pipe invocation.
+// pipeLearnState coordinates the scan loop, the EOF
 type pipeLearnState struct {
 	mu          sync.Mutex
 	interrupted bool
 	finished    bool
 }
 
-// armInterrupt installs the SIGINT/SIGTERM handler for a learning pipe.
-// Without it, the upstream process dying from the same Ctrl-C would EOF
-// stdin and the unconditional EOF-learn would merge a truncated stream into
-// the model. On a signal the handler keeps the capture file (already
-// durable on disk), reports, and exits 128+N immediately; a signal arriving
-// after the stream completed is ignored. Reporting goes through msg under
-// st.mu -- the mutex the renderer is serialized by -- so the notice never
-// gets glued onto a painted status line. The returned stop func disarms the
-// handler.
+// armInterrupt installs the SIGINT/SIGTERM handler
 func (st *pipeLearnState) armInterrupt(msg notify, dig *model.Digester, capture *model.CaptureWriter, db, key string) (stop func()) {
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, os.Interrupt, syscall.SIGTERM)
@@ -216,7 +196,7 @@ func (st *pipeLearnState) armInterrupt(msg notify, dig *model.Digester, capture 
 	}
 }
 
-// signalNumber maps a caught signal to its number for the 128+N convention.
+// signalNumber maps a caught signal to its number
 func signalNumber(s os.Signal) int {
 	if sig, ok := s.(syscall.Signal); ok {
 		return int(sig)

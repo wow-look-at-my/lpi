@@ -89,11 +89,11 @@ func TestDetectThresholds(t *testing.T) {
 	})
 	t.Run("nil below thirty percent", func(t *testing.T) {
 		lines := append(genLines(5, "2026-07-02T15:04:%02d x"), plain(15)...)
-		assert.Nil(t, Detect(lines)) // 5/20 = 25%
+		assert.Nil(t, Detect(lines)) // =
 	})
 	t.Run("thirty percent detected", func(t *testing.T) {
 		lines := append(genLines(6, "2026-07-02T15:04:%02d x"), plain(14)...)
-		f := Detect(lines) // 6/20 = 30%
+		f := Detect(lines) // =
 		require.NotNil(t, f)
 		assert.Equal(t, "iso8601", f.Name())
 	})
@@ -116,8 +116,7 @@ func TestDetectThresholds(t *testing.T) {
 }
 
 func TestDetectReturnsFreshState(t *testing.T) {
-	// The returned Format must start with clean rollover state even though
-	// detection itself exercised the probes.
+	// The returned Format must start with clean
 	f := Detect(genLines(10, "15:04:%02d building"))
 	require.NotNil(t, f)
 	assert.True(t, f.last.IsZero())

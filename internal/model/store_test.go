@@ -56,10 +56,7 @@ func TestSaveLoadKeepsInvocations(t *testing.T) {
 	assert.Equal(t, "make", got.DisplayLabel())
 }
 
-// TestLoadOldFormatWithoutInvocations pins version-1 compatibility: a file
-// written before the Invocations field existed (same version, one field
-// fewer) must still load -- gob matches struct fields by name and leaves
-// absent ones zero.
+// TestLoadOldFormatWithoutInvocations pins
 func TestLoadOldFormatWithoutInvocations(t *testing.T) {
 	type legacyEnvelope struct {
 		Version int
@@ -130,14 +127,10 @@ func TestSaveErrors(t *testing.T) {
 	})
 }
 
-// TestSaveFailureLeavesExistingModelIntact pins the atomic-save guarantee.
-// The target name is a valid path, but the temp file's longer name exceeds
-// the Linux NAME_MAX of 255 bytes, so the save fails before touching the
-// target -- the pre-existing model must survive byte-identical. (The env
-// runs as root, so permission-based failures cannot be used here.)
+// TestSaveFailureLeavesExistingModelIntact pins the
 func TestSaveFailureLeavesExistingModelIntact(t *testing.T) {
 	dir := t.TempDir()
-	base := strings.Repeat("k", 246) + ".lpi" // 250 bytes: valid target, oversize temp
+	base := strings.Repeat("k", 246) + ".lpi" // bytes: valid target, oversize temp
 	path := filepath.Join(dir, base)
 
 	m := New("k")
@@ -161,9 +154,7 @@ func TestSaveFailureLeavesExistingModelIntact(t *testing.T) {
 	assert.Len(t, got.Runs, 1)
 }
 
-// TestSaveFailedRenameKeepsTargetAndLeavesNoLitter drives Save through a
-// failing final rename (the target is a non-empty directory) and checks the
-// target's contents survive and no temp file is left behind.
+// TestSaveFailedRenameKeepsTargetAndLeavesNoLitter
 func TestSaveFailedRenameKeepsTargetAndLeavesNoLitter(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "k.lpi")
@@ -217,7 +208,7 @@ func TestPathForKey(t *testing.T) {
 		{"a/b:c", "a_b_c.lpi"},
 		{"Safe.Key_09-x", "Safe.Key_09-x.lpi"},
 		{"", "default.lpi"},
-		{"caff\xc3\xa8", "caff__.lpi"}, // multibyte UTF-8 becomes underscores
+		{"caff\xc3\xa8", "caff__.lpi"}, // multibyte becomes underscores
 	}
 	for _, tc := range cases {
 		assert.Equal(t, filepath.Join("/db", tc.want), PathForKey("/db", tc.key), "key %q", tc.key)

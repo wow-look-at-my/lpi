@@ -63,11 +63,7 @@ recorded run, and once learned they are removed from pending/.`,
 	},
 }
 
-// removePendingCaptures deletes ingested files that live inside db's
-// pending/ directory: the model now owns their data, so the capture files
-// kept by a failed run have completed their lifecycle. Files elsewhere are
-// never touched, and nothing is removed unless the save succeeded (the
-// caller returns early on any error). Removal is best-effort.
+// removePendingCaptures deletes ingested files that
 func removePendingCaptures(w io.Writer, db string, paths []string) {
 	pending, err := filepath.Abs(model.PendingDir(db))
 	if err != nil {

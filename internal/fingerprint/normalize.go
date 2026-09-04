@@ -1,23 +1,14 @@
-// Package fingerprint reduces log lines to stable templates and hashes them.
-//
-// Variable content (timestamps, counters, hex ids, addresses, durations,
-// percentages) is replaced by '#', ANSI escapes and progress-bar rewrites are
-// stripped, and whitespace is collapsed, so that the same logical log line
-// from two different runs maps to the same 64-bit fingerprint while
-// identifying text (file paths, target names, messages) is preserved.
+// Package fingerprint reduces log lines to stable
 package fingerprint
 
 import "strings"
 
-// maxNormalized caps the length of a normalized line in bytes.
+// maxNormalized caps the length of a normalized
 const maxNormalized = 512
 
-// Normalize reduces a raw log line to its stable template form. It is a
-// hand-rolled single pass over bytes (no regexp): this is the hot path that
-// every log line goes through.
+// Normalize reduces a raw log line to its stable
 func Normalize(line string) string {
-	// Progress-bar overwrite semantics: the text after the last '\r' is what
-	// would remain visible on the terminal.
+	// Progress-bar overwrite semantics: the text after
 	if i := strings.LastIndexByte(line, '\r'); i >= 0 {
 		line = line[i+1:]
 	}
@@ -61,7 +52,7 @@ func Normalize(line string) string {
 	return string(out)
 }
 
-// emitSpace flushes a pending collapsed space, unless it would lead the line.
+// emitSpace flushes a pending collapsed space
 func emitSpace(out []byte, pending *bool) []byte {
 	if *pending {
 		if len(out) > 0 {
@@ -72,10 +63,7 @@ func emitSpace(out []byte, pending *bool) []byte {
 	return out
 }
 
-// skipEscape consumes an ANSI escape sequence starting at s[i] == ESC and
-// returns the index just past it. CSI sequences (ESC '[' ... final byte
-// 0x40-0x7e) and OSC sequences (ESC ']' ... BEL or ESC '\') are consumed in
-// full; any other ESC is treated as a two-byte sequence.
+// skipEscape consumes an ANSI escape sequence
 func skipEscape(s string, i int) int {
 	i++ // consume ESC
 	if i >= len(s) {
@@ -108,19 +96,12 @@ func skipEscape(s string, i int) int {
 			i++
 		}
 		return i
-	default: // other two-byte sequence
+	default: // other sequence
 		return i + 1
 	}
 }
 
-// appendToken appends the normalized form of one word token ([A-Za-z0-9]+)
-// to out. Replacement rules, in priority order:
-//
-//  1. all digits                                      -> "#"
-//  2. "0x"/"0X" followed by hex digits                -> "#"
-//  3. all hex, len >= 6, >= 1 digit and >= 1 letter   -> "#"  (git SHAs)
-//  4. all hex, len >= 8, >= 1 digit                   -> "#"
-//  5. otherwise each maximal digit run becomes "#"    ("foo123bar" -> "foo#bar")
+// appendToken appends the normalized form of word
 func appendToken(out []byte, tok string) []byte {
 	allDigits, allHex, hasDigit, hasLetter := true, true, false, false
 	for i := 0; i < len(tok); i++ {
@@ -129,7 +110,7 @@ func appendToken(out []byte, tok string) []byte {
 			continue
 		}
 		allDigits = false
-		hasLetter = true // tokens contain only [A-Za-z0-9]
+		hasLetter = true // tokens contain only
 		if !isHexByte(tok[i]) {
 			allHex = false
 		}
@@ -158,14 +139,12 @@ func appendToken(out []byte, tok string) []byte {
 	return out
 }
 
-// uuidLen is the byte length of a canonical UUID: 8-4-4-4-12 hex groups.
+// uuidLen is the byte length of a canonical UUID
 const uuidLen = 36
 
 var uuidGroups = [5]int{8, 4, 4, 4, 12}
 
-// uuidAt reports whether s[i:] starts with a canonical UUID that is not
-// embedded in a longer word token. This pre-check is needed because the
-// 4-char hex groups would not be caught by the hex token rules.
+// uuidAt reports whether s[i:] starts with a
 func uuidAt(s string, i int) bool {
 	if i+uuidLen > len(s) {
 		return false

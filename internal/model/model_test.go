@@ -194,8 +194,7 @@ func TestAutoKey(t *testing.T) {
 	assert.NotEqual(t, key, AutoKey(digestPlain(t, "r5", []string{"alpha", "beta", "beta", "delta"})),
 		"a different fingerprint is a different pattern")
 
-	// The auto. namespace must survive the key-to-file mapping unchanged:
-	// '.' is in sanitizeKey's allowed charset.
+	// The auto
 	assert.Equal(t, key, sanitizeKey(key))
 	assert.Equal(t, filepath.Join("/db", key+".lpi"), PathForKey("/db", key))
 }

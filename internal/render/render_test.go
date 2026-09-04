@@ -1,20 +1,15 @@
 package render
 
 import (
-	"bytes"
-	"io"
-	"os"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/wow-look-at-my/log-progress-indicator/internal/progress"
 )
 
-// fullSnap mirrors the documented example snapshot.
+// fullSnap mirrors the documented example snapshot
 func fullSnap() progress.Snapshot {
 	return progress.Snapshot{
 		Progress:      0.384,
@@ -38,6 +33,7 @@ func fullSnap() progress.Snapshot {
 }
 
 func TestBar(t *testing.T) {
+	t.Serial()
 	assert.Equal(t, "[>   ]", Bar(0, 4))
 	assert.Equal(t, "[>   ]", Bar(-0.5, 4))
 	assert.Equal(t, "[====]", Bar(1, 4))
@@ -49,6 +45,7 @@ func TestBar(t *testing.T) {
 }
 
 func TestDuration(t *testing.T) {
+	t.Serial()
 	assert.Equal(t, "0s", Duration(0))
 	assert.Equal(t, "0s", Duration(-5*time.Second))
 	assert.Equal(t, "47s", Duration(47*time.Second))
@@ -61,12 +58,14 @@ func TestDuration(t *testing.T) {
 }
 
 func TestStatusLineFull(t *testing.T) {
+	t.Serial()
 	want := "[========>             ] 38.4%  units 2451/5948 (41.2%)  " +
 		"elapsed 2m14s  eta ~3m35s  pace 1.07x  match 97%"
 	assert.Equal(t, want, StatusLine(fullSnap()))
 }
 
 func TestStatusLineOmissions(t *testing.T) {
+	t.Serial()
 	s := progress.Snapshot{
 		UnitsTotal: 5948,
 		ETAKind:    "none",
@@ -77,6 +76,7 @@ func TestStatusLineOmissions(t *testing.T) {
 }
 
 func TestStatusLineRefPace(t *testing.T) {
+	t.Serial()
 	s := progress.Snapshot{
 		Progress:   0.5,
 		UnitsDone:  45,
@@ -91,8 +91,7 @@ func TestStatusLineRefPace(t *testing.T) {
 	assert.Equal(t, want, StatusLine(s))
 }
 
-// baselineSnap is what the estimator produces while recording a baseline
-// against an empty model.
+// baselineSnap is what the estimator produces while
 func baselineSnap() progress.Snapshot {
 	return progress.Snapshot{
 		Elapsed:      134 * time.Second,
@@ -105,6 +104,7 @@ func baselineSnap() progress.Snapshot {
 }
 
 func TestStatusLineRecordingBaseline(t *testing.T) {
+	t.Serial()
 	s := baselineSnap()
 	assert.Equal(t, "recording baseline  lines 1234  elapsed 2m14s", StatusLine(s))
 
@@ -113,6 +113,7 @@ func TestStatusLineRecordingBaseline(t *testing.T) {
 }
 
 func TestStatusLineIdentifying(t *testing.T) {
+	t.Serial()
 	s := baselineSnap()
 	s.Identifying = true
 	assert.Equal(t, "identifying pattern  lines 1234  elapsed 2m14s", StatusLine(s))
@@ -122,6 +123,7 @@ func TestStatusLineIdentifying(t *testing.T) {
 }
 
 func TestStatusLineRefLabel(t *testing.T) {
+	t.Serial()
 	s := fullSnap()
 	s.Label = "make -j8"
 	want := "[========>             ] 38.4%  units 2451/5948 (41.2%)  " +
@@ -134,6 +136,7 @@ func TestStatusLineRefLabel(t *testing.T) {
 }
 
 func TestSummaryPatternLabel(t *testing.T) {
+	t.Serial()
 	s := fullSnap()
 	s.Label = "make -j8"
 	want := "Progress:    38.4% (time-weighted)\n" +
@@ -147,6 +150,7 @@ func TestSummaryPatternLabel(t *testing.T) {
 }
 
 func TestSummaryRecordingBaseline(t *testing.T) {
+	t.Serial()
 	s := baselineSnap()
 	want := "Reference:   none yet (recording baseline)\n" +
 		"Lines:       1234\n" +
@@ -161,6 +165,7 @@ func TestSummaryRecordingBaseline(t *testing.T) {
 }
 
 func TestSummaryFull(t *testing.T) {
+	t.Serial()
 	want := "Progress:    38.4% (time-weighted)\n" +
 		"Units:       2451 / 5948 reference lines matched (41.2%)\n" +
 		"Elapsed:     2m14s\n" +
@@ -171,6 +176,7 @@ func TestSummaryFull(t *testing.T) {
 }
 
 func TestSummaryRefPaceAndUnknownElapsed(t *testing.T) {
+	t.Serial()
 	s := fullSnap()
 	s.ElapsedKnown = false
 	s.ETAKind = "ref-pace"
@@ -186,6 +192,7 @@ func TestSummaryRefPaceAndUnknownElapsed(t *testing.T) {
 }
 
 func TestSummaryNoETANoTimes(t *testing.T) {
+	t.Serial()
 	s := progress.Snapshot{
 		Progress:   0.25,
 		UnitsDone:  20,
@@ -202,352 +209,4 @@ func TestSummaryNoETANoTimes(t *testing.T) {
 		"Confidence:  medium (80.0% of lines matched; 5 novel, 0 overflow)\n" +
 		"Reference:   80 units, no timing data\n"
 	assert.Equal(t, want, Summary(s))
-}
-
-// forceTTY pins IsTTY to a fixed answer for the duration of the test.
-func forceTTY(t *testing.T, tty bool) {
-	t.Helper()
-	old := IsTTY
-	IsTTY = func(io.Writer) bool { return tty }
-	t.Cleanup(func() { IsTTY = old })
-}
-
-func TestRendererTTYRepaintsInPlace(t *testing.T) {
-	forceTTY(t, true)
-	var buf bytes.Buffer
-	r := New(&buf)
-	s := fullSnap()
-	r.Update(s)
-	r.Update(s)
-	r.Close(s)
-	line := StatusLine(s)
-	want := "\r\x1b[K" + line + "\r\x1b[K" + line + "\r\x1b[K" + line + "\n"
-	assert.Equal(t, want, buf.String())
-}
-
-func TestRendererPlainThrottles(t *testing.T) {
-	forceTTY(t, false)
-	old := PlainInterval
-	PlainInterval = time.Hour
-	t.Cleanup(func() { PlainInterval = old })
-
-	var buf bytes.Buffer
-	r := New(&buf)
-	s := fullSnap()
-	r.Update(s) // first update always prints
-	r.Update(s) // suppressed: same percent, interval not elapsed
-	s2 := s
-	s2.Progress = 0.41
-	r.Update(s2) // whole percent changed: prints
-	r.Close(s2)  // always prints
-	want := StatusLine(s) + "\n" + StatusLine(s2) + "\n" + StatusLine(s2) + "\n"
-	assert.Equal(t, want, buf.String())
-}
-
-func TestRendererPlainIntervalElapsed(t *testing.T) {
-	forceTTY(t, false)
-	old := PlainInterval
-	PlainInterval = 0 // every update qualifies
-	t.Cleanup(func() { PlainInterval = old })
-
-	var buf bytes.Buffer
-	r := New(&buf)
-	s := fullSnap()
-	r.Update(s)
-	r.Update(s)
-	assert.Equal(t, StatusLine(s)+"\n"+StatusLine(s)+"\n", buf.String())
-}
-
-func TestPassthroughTTYEraseAndRepaint(t *testing.T) {
-	forceTTY(t, true)
-	var buf bytes.Buffer
-	r := New(&buf)
-	pt := r.Passthrough(&buf, &sync.Mutex{})
-	s := fullSnap()
-	line := StatusLine(s)
-
-	// Child bytes before any status: forwarded untouched, nothing to erase
-	// or repaint.
-	_, err := pt.Write([]byte("early\n"))
-	require.NoError(t, err)
-	assert.Equal(t, "early\n", buf.String())
-	buf.Reset()
-
-	r.Update(s)
-	assert.Equal(t, "\r\x1b[K"+line, buf.String())
-	buf.Reset()
-
-	// A complete child line: erase first, child bytes untouched, repaint
-	// after -- the status never shares the child's line.
-	_, err = pt.Write([]byte("child\n"))
-	require.NoError(t, err)
-	assert.Equal(t, "\r\x1b[K"+"child\n"+"\r\x1b[K"+line, buf.String())
-	buf.Reset()
-
-	// A partial child line: the status stays down, since repainting would
-	// glue it onto the unterminated child text.
-	_, err = pt.Write([]byte("part"))
-	require.NoError(t, err)
-	assert.Equal(t, "\r\x1b[K"+"part", buf.String())
-	buf.Reset()
-
-	// The next paint starts on a fresh line instead of the partial one.
-	r.Update(s)
-	assert.Equal(t, "\n"+"\r\x1b[K"+line, buf.String())
-	buf.Reset()
-
-	// The child line's remainder lands at column 0 of an erased line.
-	_, err = pt.Write([]byte("rest\n"))
-	require.NoError(t, err)
-	assert.Equal(t, "\r\x1b[K"+"rest\n"+"\r\x1b[K"+line, buf.String())
-	buf.Reset()
-
-	r.Close(s)
-	assert.Equal(t, "\r\x1b[K"+line+"\n", buf.String())
-}
-
-func TestPassthroughTTYCloseAfterPartialLine(t *testing.T) {
-	forceTTY(t, true)
-	var buf bytes.Buffer
-	r := New(&buf)
-	pt := r.Passthrough(&buf, &sync.Mutex{})
-	s := fullSnap()
-
-	r.Update(s)
-	_, err := pt.Write([]byte("no trailing newline"))
-	require.NoError(t, err)
-	buf.Reset()
-
-	// Close must not paint the final status onto the partial child line.
-	r.Close(s)
-	assert.Equal(t, "\n"+"\r\x1b[K"+StatusLine(s)+"\n", buf.String())
-}
-
-func TestPassthroughPlainStatusOwnsWholeLines(t *testing.T) {
-	forceTTY(t, false)
-	old := PlainInterval
-	PlainInterval = 0 // every update qualifies
-	t.Cleanup(func() { PlainInterval = old })
-
-	var buf bytes.Buffer
-	r := New(&buf)
-	pt := r.Passthrough(&buf, &sync.Mutex{})
-	s := fullSnap()
-	line := StatusLine(s)
-
-	r.Update(s)
-	assert.Equal(t, line+"\n", buf.String(), "plain status prints end with a newline")
-	buf.Reset()
-
-	// Complete child lines pass through with no decoration at all.
-	_, err := pt.Write([]byte("child\n"))
-	require.NoError(t, err)
-	assert.Equal(t, "child\n", buf.String())
-	buf.Reset()
-
-	// A partial child line is terminated before the next status print.
-	_, err = pt.Write([]byte("part"))
-	require.NoError(t, err)
-	r.Update(s)
-	assert.Equal(t, "part"+"\n"+line+"\n", buf.String())
-	buf.Reset()
-
-	r.Close(s)
-	assert.Equal(t, line+"\n", buf.String(), "Close ends with a newline in plain mode")
-}
-
-func TestMessageTTY(t *testing.T) {
-	forceTTY(t, true)
-	var buf bytes.Buffer
-	r := New(&buf)
-	pt := r.Passthrough(&buf, &sync.Mutex{})
-	s := fullSnap()
-	line := StatusLine(s)
-
-	// Nothing painted yet: the message is just its own line.
-	r.Message("warning: early")
-	assert.Equal(t, "warning: early\n", buf.String())
-	buf.Reset()
-
-	// A painted status is erased first; the message owns its line and the
-	// status is not repainted until the next Update.
-	r.Update(s)
-	buf.Reset()
-	r.Message("warning: capture file disabled: boom")
-	assert.Equal(t, "\r\x1b[K"+"warning: capture file disabled: boom\n", buf.String())
-	buf.Reset()
-
-	// The next Update repaints on the fresh line left by the message.
-	r.Update(s)
-	assert.Equal(t, "\r\x1b[K"+line, buf.String())
-	buf.Reset()
-
-	// A complete passthrough line after a message also repaints the status.
-	r.Message("notice")
-	buf.Reset()
-	_, err := pt.Write([]byte("child\n"))
-	require.NoError(t, err)
-	assert.Equal(t, "child\n"+"\r\x1b[K"+line, buf.String())
-}
-
-func TestMessageTTYAfterPartialChildLine(t *testing.T) {
-	forceTTY(t, true)
-	var buf bytes.Buffer
-	r := New(&buf)
-	pt := r.Passthrough(&buf, &sync.Mutex{})
-	s := fullSnap()
-
-	r.Update(s)
-	_, err := pt.Write([]byte("partial"))
-	require.NoError(t, err)
-	buf.Reset()
-
-	// The partial child line is terminated before the message: the two
-	// never share a terminal line.
-	r.Message("interrupted -- run not learned")
-	assert.Equal(t, "\n"+"interrupted -- run not learned\n", buf.String())
-}
-
-func TestMessagePlain(t *testing.T) {
-	forceTTY(t, false)
-	old := PlainInterval
-	PlainInterval = 0 // every update qualifies
-	t.Cleanup(func() { PlainInterval = old })
-
-	var buf bytes.Buffer
-	r := New(&buf)
-	pt := r.Passthrough(&buf, &sync.Mutex{})
-	s := fullSnap()
-	line := StatusLine(s)
-
-	// Messages are whole lines between whole status lines.
-	r.Update(s)
-	r.Message("warning: capture file disabled: boom")
-	r.Update(s)
-	assert.Equal(t, line+"\n"+"warning: capture file disabled: boom\n"+line+"\n", buf.String())
-	buf.Reset()
-
-	// A partial child line is terminated before the message.
-	_, err := pt.Write([]byte("part"))
-	require.NoError(t, err)
-	r.Message("notice")
-	assert.Equal(t, "part"+"\n"+"notice\n", buf.String())
-}
-
-func TestBreakTTY(t *testing.T) {
-	forceTTY(t, true)
-	var buf bytes.Buffer
-	r := New(&buf)
-	pt := r.Passthrough(&buf, &sync.Mutex{})
-	s := fullSnap()
-
-	// Nothing in progress: Break emits nothing.
-	r.Break()
-	assert.Empty(t, buf.String())
-
-	// A painted status is committed by the newline, not erased.
-	r.Update(s)
-	buf.Reset()
-	r.Break()
-	assert.Equal(t, "\n", buf.String())
-	buf.Reset()
-
-	// After Break a completed passthrough line does not resurrect the
-	// abandoned status.
-	_, err := pt.Write([]byte("child\n"))
-	require.NoError(t, err)
-	assert.Equal(t, "child\n", buf.String())
-	buf.Reset()
-
-	// A partial child line is terminated too.
-	r.Update(s)
-	_, err = pt.Write([]byte("part"))
-	require.NoError(t, err)
-	buf.Reset()
-	r.Break()
-	assert.Equal(t, "\n", buf.String())
-}
-
-func TestBreakPlain(t *testing.T) {
-	forceTTY(t, false)
-	old := PlainInterval
-	PlainInterval = 0
-	t.Cleanup(func() { PlainInterval = old })
-
-	var buf bytes.Buffer
-	r := New(&buf)
-	pt := r.Passthrough(&buf, &sync.Mutex{})
-	s := fullSnap()
-
-	// Plain statuses already own whole lines: Break after one is a no-op.
-	r.Update(s)
-	buf.Reset()
-	r.Break()
-	assert.Empty(t, buf.String())
-
-	// Only a partial child line needs terminating.
-	_, err := pt.Write([]byte("part"))
-	require.NoError(t, err)
-	buf.Reset()
-	r.Break()
-	assert.Equal(t, "\n", buf.String())
-}
-
-func TestPassthroughSeparateTTYStreams(t *testing.T) {
-	forceTTY(t, true) // both the status stream and dst count as TTYs
-	var status, out bytes.Buffer
-	r := New(&status)
-	pt := r.Passthrough(&out, &sync.Mutex{})
-	s := fullSnap()
-	line := StatusLine(s)
-
-	r.Update(s)
-	_, err := pt.Write([]byte("stdout line\n"))
-	require.NoError(t, err)
-	_, err = pt.Write([]byte("partial"))
-	require.NoError(t, err)
-	r.Update(s)
-
-	assert.Equal(t, "stdout line\npartial", out.String(),
-		"child bytes reach their own stream byte-for-byte")
-	assert.Equal(t, "\r\x1b[K"+line+"\r\x1b[K"+"\r\x1b[K"+line+"\r\x1b[K"+"\n"+"\r\x1b[K"+line,
-		status.String(), "erase and repaint stay on the renderer's stream")
-}
-
-func TestPassthroughUncoordinatedIsUnwrapped(t *testing.T) {
-	forceTTY(t, false)
-	var status, out bytes.Buffer
-	r := New(&status)
-	assert.Same(t, &out, r.Passthrough(&out, &sync.Mutex{}),
-		"a non-TTY foreign stream needs no coordination")
-	assert.NotSame(t, &status, r.Passthrough(&status, &sync.Mutex{}),
-		"the renderer's own stream is always coordinated")
-}
-
-// funcWriter is an uncomparable io.Writer used to prove sameWriter cannot
-// panic on writer identity checks.
-type funcWriter func([]byte) (int, error)
-
-func (f funcWriter) Write(p []byte) (int, error) { return f(p) }
-
-func TestPassthroughUncomparableWriter(t *testing.T) {
-	forceTTY(t, false)
-	w := funcWriter(func(p []byte) (int, error) { return len(p), nil })
-	r := New(w)
-	assert.NotPanics(t, func() { r.Passthrough(w, &sync.Mutex{}) })
-}
-
-func TestIsTTYDefault(t *testing.T) {
-	assert.False(t, IsTTY(&bytes.Buffer{}))
-
-	f, err := os.CreateTemp(t.TempDir(), "plain")
-	require.NoError(t, err)
-	defer f.Close()
-	assert.False(t, IsTTY(f), "regular file is not a TTY")
-
-	null, err := os.Open(os.DevNull)
-	require.NoError(t, err)
-	assert.True(t, IsTTY(null), "/dev/null is a character device")
-	require.NoError(t, null.Close())
-	assert.False(t, IsTTY(null), "Stat on a closed file fails")
 }

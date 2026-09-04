@@ -16,8 +16,7 @@ import (
 	"github.com/wow-look-at-my/log-progress-indicator/internal/model"
 )
 
-// captureExit stubs the osExit seam and returns a pointer to the recorded
-// code (-1 when never called).
+// captureExit stubs the osExit seam and returns a
 func captureExit(t *testing.T) *int {
 	t.Helper()
 	code := -1
@@ -28,6 +27,7 @@ func captureExit(t *testing.T) *int {
 }
 
 func TestRunPassthroughAndExitZero(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	code := captureExit(t)
@@ -43,6 +43,7 @@ func TestRunPassthroughAndExitZero(t *testing.T) {
 }
 
 func TestRunPropagatesExitCode(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	code := captureExit(t)
@@ -55,6 +56,7 @@ func TestRunPropagatesExitCode(t *testing.T) {
 }
 
 func TestRunLearnOnSuccess(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	captureExit(t)
@@ -70,6 +72,7 @@ func TestRunLearnOnSuccess(t *testing.T) {
 }
 
 func TestRunLearnSkippedOnFailure(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	code := captureExit(t)
@@ -83,6 +86,7 @@ func TestRunLearnSkippedOnFailure(t *testing.T) {
 }
 
 func TestRunForwardsSignals(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	code := captureExit(t)
@@ -92,7 +96,7 @@ func TestRunForwardsSignals(t *testing.T) {
 		_ = syscall.Kill(os.Getpid(), syscall.SIGTERM)
 	}()
 	start := time.Now()
-	// exec so the signal hits the process actually holding the pipes.
+	// exec so the signal hits the process actually
 	_, errOut, err := execLpi(t, nil, "run", "--db", db, "--key", "demo", "--",
 		"/bin/sh", "-c", "echo waiting; exec sleep 30")
 	require.NoError(t, err)
@@ -102,6 +106,7 @@ func TestRunForwardsSignals(t *testing.T) {
 }
 
 func TestRunSignalKilledChildNotLearned(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	code := captureExit(t)
@@ -120,12 +125,13 @@ func TestRunSignalKilledChildNotLearned(t *testing.T) {
 }
 
 func TestRunBootstrapsMissingKeyWithLearn(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	shortTicks(t)
 	captureExit(t)
 	script := "sed -n 1,40p " + demoPartial
 
-	// First invocation: no model yet -> baseline recording, learned on exit 0.
+	// invocation: no model yet -> baseline recording
 	_, errOut, err := execLpi(t, nil, "run", "--db", db, "--key", "fresh", "--learn", "--",
 		"/bin/sh", "-c", script)
 	require.NoError(t, err)
@@ -135,7 +141,7 @@ func TestRunBootstrapsMissingKeyWithLearn(t *testing.T) {
 	assert.Contains(t, errOut, `into key "fresh" (1 runs)`)
 	assert.Len(t, loadModel(t, db, "fresh").Runs, 1)
 
-	// Second invocation: the recorded baseline is now the reference.
+	// invocation: the recorded baseline is now the
 	_, errOut, err = execLpi(t, nil, "run", "--db", db, "--key", "fresh", "--learn", "--",
 		"/bin/sh", "-c", script)
 	require.NoError(t, err)
@@ -147,24 +153,22 @@ func TestRunBootstrapsMissingKeyWithLearn(t *testing.T) {
 }
 
 func TestRunMissingKeyStillErrors(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 
-	// Without --learn there is nothing to record: a missing key is fatal.
+	// Without --learn there is nothing to record: a
 	_, _, err := execLpi(t, nil, "run", "--db", db, "--key", "fresh", "--", "/bin/true")
 	require.ErrorContains(t, err, `no model for key "fresh"`)
 
-	// With a --ref the reference is explicit, so a missing --key is fatal
-	// even under --learn.
+	// With a --ref the reference is explicit, so a
 	_, _, err = execLpi(t, nil, "run", "--db", db, "--key", "fresh", "--learn",
 		"--ref", demoBuild1, "--", "/bin/true")
 	require.ErrorContains(t, err, `no model for key "fresh"`)
 }
 
-// TestRunFailureKeepsCaptureAndRescues is the end-to-end rescue: a failed
-// learning run keeps its capture file and prints a recovery command; running
-// that command verbatim learns the run, cleans up pending/, and the model
-// then estimates a subsequent run.
+// TestRunFailureKeepsCaptureAndRescues is the
 func TestRunFailureKeepsCaptureAndRescues(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	code := captureExit(t)
@@ -192,7 +196,7 @@ func TestRunFailureKeepsCaptureAndRescues(t *testing.T) {
 	_, err = strconv.ParseInt(stamp, 10, 64)
 	require.NoError(t, err, "the stamp is unix nanoseconds: %q", stamp)
 
-	// Run the printed recovery command verbatim (minus the binary name).
+	// Run the printed recovery command verbatim (minus
 	var hinted []string
 	for _, line := range strings.Split(errOut, "\n") {
 		if rest, found := strings.CutPrefix(line, "learn it later with: lpi "); found {
@@ -209,7 +213,7 @@ func TestRunFailureKeepsCaptureAndRescues(t *testing.T) {
 	assert.Empty(t, pendingFiles(t, db), "learning a pending capture removes it")
 	assert.Len(t, loadModel(t, db, "demo").Runs, 3)
 
-	// The rescued model estimates a fresh run sanely.
+	// The rescued model estimates a fresh run sanely
 	*code = -1
 	_, errOut, err = execLpi(t, nil, "run", "--db", db, "--key", "demo", "--",
 		"/bin/sh", "-c", "sed -n 1,40p "+demoPartial)
@@ -219,11 +223,9 @@ func TestRunFailureKeepsCaptureAndRescues(t *testing.T) {
 	assert.Contains(t, errOut, "Units:")
 }
 
-// TestRunBaselineFailureKeepsCaptureWithTimes is the reported bug: a
-// baseline-recording run (no model yet) that fails after producing a long
-// log must not throw the log away, and the rescued run must keep its
-// per-line times rather than fall back to position mode.
+// TestRunBaselineFailureKeepsCaptureWithTimes is
 func TestRunBaselineFailureKeepsCaptureWithTimes(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	shortTicks(t)
 	code := captureExit(t)
@@ -254,6 +256,7 @@ func TestRunBaselineFailureKeepsCaptureWithTimes(t *testing.T) {
 }
 
 func TestRunLearnOnFailure(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	code := captureExit(t)
@@ -271,11 +274,13 @@ func TestRunLearnOnFailure(t *testing.T) {
 }
 
 func TestRunLearnOnFailureRequiresKey(t *testing.T) {
+	t.Serial()
 	_, _, err := execLpi(t, nil, "run", "--db", t.TempDir(), "--learn-on-failure", "--", "/bin/true")
 	require.ErrorContains(t, err, "--learn requires --key")
 }
 
 func TestRunFailureTooShortKeepsNothing(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	code := captureExit(t)
@@ -290,6 +295,7 @@ func TestRunFailureTooShortKeepsNothing(t *testing.T) {
 }
 
 func TestRunLearnTooShortDiscardsCapture(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	captureExit(t)
@@ -300,11 +306,9 @@ func TestRunLearnTooShortDiscardsCapture(t *testing.T) {
 	assert.Empty(t, pendingFiles(t, db))
 }
 
-// TestRunLearnSaveFailureKeepsCapture drives the model save itself to fail
-// (the key produces a model file name past the OS limit, while the capture
-// file's truncated name stays valid): the digested run is lost but the
-// capture file survives with recovery instructions.
+// TestRunLearnSaveFailureKeepsCapture drives the
 func TestRunLearnSaveFailureKeepsCapture(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	shortTicks(t)
 	captureExit(t)
@@ -319,10 +323,9 @@ func TestRunLearnSaveFailureKeepsCapture(t *testing.T) {
 	require.Len(t, pendingFiles(t, db), 1)
 }
 
-// TestRunCaptureDisabledWarning proves the recovery feature never breaks
-// the primary flow: when the capture file cannot be created, the run warns
-// once and proceeds normally.
+// TestRunCaptureDisabledWarning proves the recovery
 func TestRunCaptureDisabledWarning(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	require.NoError(t, os.WriteFile(filepath.Join(db, "pending"), []byte("blocker"), 0o644))
 	shortTicks(t)
@@ -337,12 +340,9 @@ func TestRunCaptureDisabledWarning(t *testing.T) {
 	assert.NotContains(t, errOut, "captured log kept")
 }
 
-// TestRunTTYCaptureWarningOwnsItsLine forces the capture warning (pending/
-// is a regular file, so the capture file cannot be created) on a TTY run
-// with live rendering: the warning must own a whole terminal line from
-// column 0 -- never glued onto a status paint or a child line -- and the
-// status discipline must hold around it.
+// TestRunTTYCaptureWarningOwnsItsLine forces the
 func TestRunTTYCaptureWarningOwnsItsLine(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	require.NoError(t, os.WriteFile(filepath.Join(db, "pending"), []byte("blocker"), 0o644))
 	shortTicks(t)
@@ -370,10 +370,9 @@ func TestRunTTYCaptureWarningOwnsItsLine(t *testing.T) {
 	assert.Equal(t, 1, warns, "the capture warning must render exactly once, as a whole line")
 }
 
-// TestCaptureFileAsRef proves capture files work anywhere a reference log
-// does: --ref resolution goes through model.DigestFile, which sniffs the
-// capture header.
+// TestCaptureFileAsRef proves capture files work
 func TestCaptureFileAsRef(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	captureExit(t)
@@ -391,8 +390,7 @@ func TestCaptureFileAsRef(t *testing.T) {
 	assert.Contains(t, out, "Units:")
 }
 
-// glueScript emits interleaved stdout and stderr lines plus mid-line stdout
-// pauses, so live status repaints land between and inside child lines.
+// glueScript emits interleaved stdout and stderr
 const glueScript = `i=0
 while [ $i -lt 8 ]; do
 	i=$((i+1))
@@ -403,7 +401,7 @@ while [ $i -lt 8 ]; do
 	echo "-done"
 done`
 
-// glueScriptStdout is the exact byte stream glueScript writes to stdout.
+// glueScriptStdout is the exact byte stream
 func glueScriptStdout() string {
 	var b strings.Builder
 	for i := 1; i <= 8; i++ {
@@ -412,12 +410,9 @@ func glueScriptStdout() string {
 	return b.String()
 }
 
-// TestRunTTYStatusNeverGluesToChildOutput is the reported bug: on a TTY the
-// status line was painted with no trailing newline and passthrough bytes
-// were appended straight onto it ("recording baseline  lines 35  elapsed
-// 3sLocal build detected..."). The renderer must erase before child bytes,
-// repaint after them, and never paint onto a partial child line.
+// TestRunTTYStatusNeverGluesToChildOutput is the
 func TestRunTTYStatusNeverGluesToChildOutput(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	shortTicks(t)
 	captureExit(t)
@@ -438,11 +433,11 @@ func TestRunTTYStatusNeverGluesToChildOutput(t *testing.T) {
 	}
 }
 
-// TestRunPlainStatusLinesAreWholeLines locks the plain-mode discipline:
-// every status print is a complete line, and child output never shares one.
+// TestRunPlainStatusLinesAreWholeLines locks the
 func TestRunPlainStatusLinesAreWholeLines(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
-	shortTicks(t) // PlainInterval = 0: a status line per update
+	shortTicks(t) // PlainInterval = a status line per update
 	captureExit(t)
 	forceTTY(t, false)
 
@@ -462,6 +457,7 @@ func TestRunPlainStatusLinesAreWholeLines(t *testing.T) {
 }
 
 func TestRunArgumentValidation(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 
 	_, _, err := execLpi(t, nil, "run", "--db", db, "--key", "demo", "/bin/true")

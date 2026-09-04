@@ -6,52 +6,32 @@ import (
 	"github.com/wow-look-at-my/log-progress-indicator/internal/model"
 )
 
-// Candidate is one stored pattern offered to the Chooser.
+// Candidate is stored pattern offered to the Chooser
 type Candidate struct {
 	Key   string
 	Label string // DisplayLabel of the model, for status surfacing
 	Model *model.Model
 }
 
-// Fit decision thresholds. Locking is a display decision: because every
-// candidate estimator consumes the stream from line 1, locking late or
-// re-locking costs nothing, so the bars are tuned for responsiveness. An
-// obvious match (earlyLockRate) locks as soon as lockMinLines rules out
-// coincidence; anything holding lockRate by lockWindowLines locks then,
-// and the check keeps running after the window so a preamble-heavy log
-// still locks the moment a candidate's cumulative rate recovers.
-// switchMargin is hysteresis: without it two sibling patterns with heavy
-// overlap would flap the lock (and the label) line by line. mergeRate
-// gates the LEARN decision and is deliberately higher than lockRate --
-// display can afford to be provisionally wrong, merging a run into the
-// wrong pattern cannot; 0.6 aligns with the "medium" confidence boundary.
+// Fit decision thresholds
 const (
 	lockMinLines    = 12   // never lock before this many counted lines
 	earlyLockRate   = 0.80 // rate that locks as soon as lockMinLines is reached
 	lockWindowLines = 32   // standard decision point
 	lockRate        = 0.50 // minimum rate to lock at/after the window
-	switchMargin    = 0.15 // a rival must beat the locked rate by this to steal the lock
-	mergeRate       = 0.60 // minimum final rate to merge the run into the locked pattern
+	switchMargin    = 0.15 // a rival must beat the locked rate by this to
+	mergeRate       = 0.60 // minimum final rate to merge the run into the
 )
 
-// Chooser feeds every observed line to one Estimator per candidate and
-// decides which stored pattern the live output belongs to. Because
-// matching is order-free and every candidate consumes the stream from
-// line 1, locking late or switching costs nothing: the winner's estimator
-// state is already exact. A "null" estimator over an empty model is fed
-// alongside the candidates; it supplies the line counts, elapsed time,
-// and confidence-"none" snapshots for the pre-lock and no-candidate
-// states. Like Estimator, a Chooser is not safe for concurrent use.
+// Chooser feeds every observed line to Estimator
 type Chooser struct {
 	cands  []Candidate
 	ests   []*Estimator
 	null   *Estimator
-	locked int // index into cands; -1 while unlocked
+	locked int // index into cands; while unlocked
 }
 
-// NewChooser returns a Chooser over the given stored patterns. Zero
-// candidates is valid: the Chooser then behaves exactly like an Estimator
-// over an empty model (the baseline-recording state).
+// NewChooser returns a Chooser over the given
 func NewChooser(cands []Candidate) *Chooser {
 	c := &Chooser{cands: cands, locked: -1, null: NewEstimator(model.New(""))}
 	c.ests = make([]*Estimator, len(cands))
@@ -61,9 +41,7 @@ func NewChooser(cands []Candidate) *Chooser {
 	return c
 }
 
-// Observe feeds one live line to every estimator, then re-evaluates the
-// lock (cheap: candidate counts are small). Line counting, normalization,
-// and empty-line skipping are delegated entirely to the estimators.
+// Observe feeds live line to every estimator, then
 func (c *Chooser) Observe(line string, at time.Time) {
 	c.null.Observe(line, at)
 	for _, e := range c.ests {
@@ -72,7 +50,7 @@ func (c *Chooser) Observe(line string, at time.Time) {
 	c.decide()
 }
 
-// Tick advances every estimator's clock without a line.
+// Tick advances every estimator's clock without a
 func (c *Chooser) Tick(at time.Time) {
 	c.null.Tick(at)
 	for _, e := range c.ests {
@@ -80,7 +58,7 @@ func (c *Chooser) Tick(at time.Time) {
 	}
 }
 
-// decide applies the lock state machine after a line was counted.
+// decide applies the lock state machine after a
 func (c *Chooser) decide() {
 	if len(c.cands) == 0 || c.null.current < lockMinLines {
 		return
@@ -93,14 +71,13 @@ func (c *Chooser) decide() {
 		}
 		return
 	}
-	// A rival with full history can steal the lock, but only decisively:
-	// it must clear the lock bar AND beat the incumbent by the margin.
+	// A rival with full history can steal the lock, but
 	if best != c.locked && br >= lockRate && br >= c.rate(c.locked)+switchMargin {
 		c.locked = best
 	}
 }
 
-// rate is candidate i's cumulative match rate (matched/current lines).
+// rate is candidate i's cumulative match rate
 func (c *Chooser) rate(i int) float64 {
 	e := c.ests[i]
 	if e.current == 0 {
@@ -109,14 +86,12 @@ func (c *Chooser) rate(i int) float64 {
 	return float64(e.matched) / float64(e.current)
 }
 
-// progressOf is candidate i's matched weight, clamped like Snapshot().Progress.
+// progressOf is candidate i's matched weight
 func (c *Chooser) progressOf(i int) float64 {
 	return min(c.ests[i].weightDone, 1)
 }
 
-// bestIdx returns the current best candidate. Ties break deterministically:
-// higher rate, then higher matched weight, then more runs in the model,
-// then the lexicographically smaller key.
+// bestIdx returns the current best candidate
 func (c *Chooser) bestIdx() int {
 	best := 0
 	for i := 1; i < len(c.cands); i++ {
@@ -140,10 +115,7 @@ func (c *Chooser) better(i, j int) bool {
 	return c.cands[i].Key < c.cands[j].Key
 }
 
-// Snapshot returns the locked candidate's estimate labeled with its
-// pattern; before the lock, the null estimator's snapshot with Identifying
-// set; and with no candidates at all, the plain null snapshot (which
-// renders as the existing baseline-recording state).
+// Snapshot returns the locked candidate's estimate
 func (c *Chooser) Snapshot() Snapshot {
 	if c.locked >= 0 {
 		s := c.ests[c.locked].Snapshot()
@@ -155,7 +127,7 @@ func (c *Chooser) Snapshot() Snapshot {
 	return s
 }
 
-// Locked reports the pattern the Chooser has locked onto, if any.
+// Locked reports the pattern the Chooser has locked
 func (c *Chooser) Locked() (key, label string, ok bool) {
 	if c.locked < 0 {
 		return "", "", false
@@ -163,8 +135,7 @@ func (c *Chooser) Locked() (key, label string, ok bool) {
 	return c.cands[c.locked].Key, c.cands[c.locked].Label, true
 }
 
-// Best reports the current best candidate by cumulative match rate; ok is
-// false when there are no candidates or no counted lines yet.
+// Best reports the current best candidate by
 func (c *Chooser) Best() (key string, rate float64, ok bool) {
 	if len(c.cands) == 0 || c.null.current == 0 {
 		return "", 0, false
@@ -173,7 +144,7 @@ func (c *Chooser) Best() (key string, rate float64, ok bool) {
 	return c.cands[i].Key, c.rate(i), true
 }
 
-// FinalRate returns key's cumulative match rate (0 for an unknown key).
+// FinalRate returns key's cumulative match rate for
 func (c *Chooser) FinalRate(key string) float64 {
 	for i, cand := range c.cands {
 		if cand.Key == key {
@@ -183,10 +154,7 @@ func (c *Chooser) FinalRate(key string) float64 {
 	return 0
 }
 
-// MergeTarget returns the pattern a finished run should be merged into:
-// the locked candidate, provided its final cumulative match rate clears
-// mergeRate. Below that bar ok is false and the caller records a new
-// pattern instead of risking the stored one.
+// MergeTarget returns the pattern a finished run
 func (c *Chooser) MergeTarget() (key, label string, ok bool) {
 	if c.locked < 0 || c.rate(c.locked) < mergeRate {
 		return "", "", false

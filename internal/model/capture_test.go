@@ -11,11 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestCaptureRoundTripMatchesLiveDigest is the core durability guarantee:
-// digesting a capture file yields byte-for-byte the same Run as the live
-// digester saw, including per-line times, empty lines, and tab-containing
-// lines. It also pins the out-of-band-stamp design: the fingerprints equal
-// those of the raw line text, which an in-band stamp prefix would break.
+// TestCaptureRoundTripMatchesLiveDigest is the core
 func TestCaptureRoundTripMatchesLiveDigest(t *testing.T) {
 	db := t.TempDir()
 	const label = "run 2026-07-09 12:00:00 make -j8"
@@ -143,7 +139,7 @@ func TestCaptureMalformedRecordsDegradeGracefully(t *testing.T) {
 }
 
 func TestCaptureNonCaptureFilesUnaffected(t *testing.T) {
-	// A log whose first line merely mentions the magic mid-line is a plain log.
+	// A log whose line merely mentions the magic
 	path := writeFile(t, "plain.log", "note: #lpi-capture v1 is the header\nalpha\nbeta\n")
 	run, err := DigestFile(path)
 	require.NoError(t, err)

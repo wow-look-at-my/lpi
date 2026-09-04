@@ -29,7 +29,7 @@ func TestScanCRLF(t *testing.T) {
 }
 
 func TestScanInteriorCRPreserved(t *testing.T) {
-	// Only one trailing '\r' is stripped; interior ones (progress bars) stay.
+	// Only trailing '\r' is stripped; interior ones
 	assert.Equal(t, []string{"a\rb", "x\r"}, collect(t, "a\rb\nx\r\r\n"))
 }
 
@@ -69,7 +69,7 @@ func TestScanOverlongFinalUnterminatedLine(t *testing.T) {
 	assert.Len(t, lines[0], MaxLine)
 }
 
-// readerWithErr returns its data on the first read, then the error.
+// readerWithErr returns its data on the read, then
 type readerWithErr struct {
 	data string
 	err  error

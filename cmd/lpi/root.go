@@ -6,10 +6,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// version is the build version; overridden at release time via -ldflags.
+// version is the build version; overridden at
 var version = "dev"
 
-// osExit is a seam so tests can observe the exit code.
+// osExit is a seam so tests can observe the exit
 var osExit = os.Exit
 
 var rootCmd = &cobra.Command{
@@ -43,9 +43,7 @@ Explicit keys for power users:
 	Version: version,
 }
 
-// Execute routes the process arguments (a bare command becomes
-// 'auto -- CMD [ARGS...]') and runs the root command, exiting nonzero on
-// error.
+// Execute routes the process arguments (a bare
 func Execute() {
 	rootCmd.SetArgs(routeArgs(os.Args[1:]))
 	if err := rootCmd.Execute(); err != nil {

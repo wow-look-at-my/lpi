@@ -11,8 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// autoLines returns n distinct all-letter log lines (digits would collapse
-// under normalization and merge the fingerprints).
+// autoLines returns n distinct all-letter log lines
 func autoLines(tag string, n int) []string {
 	lines := make([]string, n)
 	for i := range lines {
@@ -21,12 +20,12 @@ func autoLines(tag string, n int) []string {
 	return lines
 }
 
-// printfScript builds a shell script printing the given lines.
+// printfScript builds a shell script printing the
 func printfScript(lines []string) string {
 	return "printf '" + strings.Join(lines, "\\n") + "\\n'"
 }
 
-// autoModelKeys lists the auto.* model keys stored in db, sorted by ReadDir.
+// autoModelKeys lists the auto.* model keys stored
 func autoModelKeys(t *testing.T, db string) []string {
 	t.Helper()
 	entries, err := os.ReadDir(db)
@@ -45,6 +44,7 @@ func autoModelKeys(t *testing.T, db string) []string {
 }
 
 func TestAutoRecordsNewPattern(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	shortTicks(t)
 	captureExit(t)
@@ -66,6 +66,7 @@ func TestAutoRecordsNewPattern(t *testing.T) {
 }
 
 func TestAutoSecondRunRecognizesAndRefines(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	shortTicks(t)
 	captureExit(t)
@@ -94,6 +95,7 @@ func TestAutoSecondRunRecognizesAndRefines(t *testing.T) {
 }
 
 func TestAutoCrossCommandFit(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	shortTicks(t)
 	captureExit(t)
@@ -104,8 +106,7 @@ func TestAutoCrossCommandFit(t *testing.T) {
 	keys := autoModelKeys(t, db)
 	require.Len(t, keys, 1)
 
-	// A different command line producing the same output is the same
-	// pattern: identity is the output, the command is only a label.
+	// A different command line producing the same
 	other := "true; " + script
 	_, errOut, err := execLpi(t, nil, "auto", "--db", db, "--", "/bin/sh", "-c", other)
 	require.NoError(t, err)
@@ -118,6 +119,7 @@ func TestAutoCrossCommandFit(t *testing.T) {
 }
 
 func TestAutoNovelOutputRecordsSeparatePattern(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	shortTicks(t)
 	captureExit(t)
@@ -139,12 +141,12 @@ func TestAutoNovelOutputRecordsSeparatePattern(t *testing.T) {
 }
 
 func TestAutoShortRunMergesByContentHash(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	shortTicks(t)
 	captureExit(t)
 
-	// 5 lines can never reach lockMinLines, so the second run cannot lock;
-	// the content-derived id still lands it on the recorded pattern.
+	// lines can never reach lockMinLines, so the run
 	script := printfScript(autoLines("tiny", 5))
 	_, _, err := execLpi(t, nil, "auto", "--db", db, "--", "/bin/sh", "-c", script)
 	require.NoError(t, err)
@@ -158,6 +160,7 @@ func TestAutoShortRunMergesByContentHash(t *testing.T) {
 }
 
 func TestAutoFailureKeepsCapture(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	shortTicks(t)
 	code := captureExit(t)
@@ -177,6 +180,7 @@ func TestAutoFailureKeepsCapture(t *testing.T) {
 }
 
 func TestAutoLocksAndMergesUserKey(t *testing.T) {
+	t.Serial()
 	db := seedDemoModel(t)
 	shortTicks(t)
 	captureExit(t)
@@ -197,9 +201,8 @@ func TestAutoLocksAndMergesUserKey(t *testing.T) {
 }
 
 func TestAutoCleanShortRunIsNotAnError(t *testing.T) {
-	// A clean child exit with <2 nonempty lines has nothing to learn, but
-	// wrapping a quick command must never turn its success into a failure:
-	// a one-line notice, no error, no usage dump, exit code stays 0.
+	t.Serial()
+	// A clean child exit with nonempty lines has
 	tests := []struct {
 		name string
 		args []string
@@ -227,6 +230,7 @@ func TestAutoCleanShortRunIsNotAnError(t *testing.T) {
 }
 
 func TestAutoSkipsCorruptModels(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	shortTicks(t)
 	captureExit(t)
@@ -241,6 +245,7 @@ func TestAutoSkipsCorruptModels(t *testing.T) {
 }
 
 func TestAutoTransportErrorKeepsNothingWhenEmpty(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	shortTicks(t)
 	captureExit(t)
@@ -251,6 +256,7 @@ func TestAutoTransportErrorKeepsNothingWhenEmpty(t *testing.T) {
 }
 
 func TestAutoArgumentValidation(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 
 	_, _, err := execLpi(t, nil, "auto", "--db", db, "/bin/true")
@@ -262,8 +268,7 @@ func TestAutoArgumentValidation(t *testing.T) {
 	_, _, err = execLpi(t, nil, "auto", "--db", db, "--")
 	require.ErrorContains(t, err, "no command given")
 
-	// pflag's '--' position is sticky across executions; the validation
-	// must hold on a repeat run (resetCommand re-inits it).
+	// pflag's '--' position is sticky across
 	_, _, err = execLpi(t, nil, "auto", "--db", db, "/bin/true")
 	require.ErrorContains(t, err, "missing '--'")
 }

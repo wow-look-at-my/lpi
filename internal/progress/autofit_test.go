@@ -11,8 +11,7 @@ import (
 	"github.com/wow-look-at-my/log-progress-indicator/internal/model"
 )
 
-// novelLines returns n distinct all-letter lines guaranteed absent from
-// steps() models.
+// novelLines returns n distinct all-letter lines
 func novelLines(n int) []string {
 	lines := make([]string, n)
 	for i := range lines {
@@ -21,7 +20,7 @@ func novelLines(n int) []string {
 	return lines
 }
 
-// namedLines returns n distinct lines carrying the given tag word.
+// namedLines returns n distinct lines carrying the
 func namedLines(tag string, n int) []string {
 	lines := make([]string, n)
 	for i := range lines {
@@ -30,7 +29,7 @@ func namedLines(tag string, n int) []string {
 	return lines
 }
 
-// multiRunModel builds a model with `runs` identical position-mode runs.
+// multiRunModel builds a model with `runs`
 func multiRunModel(t *testing.T, key string, runs int, lines []string) *model.Model {
 	t.Helper()
 	m := model.New(key)
@@ -103,7 +102,7 @@ func TestChooserStandardWindowLock(t *testing.T) {
 	}
 	ch := NewChooser([]Candidate{cand("k", "k", plainModel(t, mLines))})
 
-	// Rate holds ~2/3 throughout: below earlyLockRate, above lockRate.
+	// Rate holds throughout: below earlyLockRate, above
 	observeAll(ch, feed[:31])
 	_, _, ok := ch.Locked()
 	assert.False(t, ok, "a moderate rate must wait for the decision window")
@@ -127,9 +126,7 @@ func TestChooserLateLockAfterNovelPreamble(t *testing.T) {
 	assert.False(t, ok, "40 novel lines cannot lock anything")
 	assert.True(t, ch.Snapshot().Identifying)
 
-	// Cumulative rate k/(40+k) crosses lockRate at the 40th matching line;
-	// the decision keeps re-running after the window, so the lock lands
-	// exactly there.
+	// Cumulative rate crosses lockRate at the matching
 	observeAll(ch, mLines[:39])
 	_, _, ok = ch.Locked()
 	assert.False(t, ok, "39/79 is still below lockRate")
@@ -165,13 +162,11 @@ func TestChooserSwitchHysteresis(t *testing.T) {
 	observeAll(ch, aLines[:18])
 	assert.Equal(t, "a", lockedKey(t, ch))
 
-	// 22 rival lines: b = 22/40 = 0.55, a = 18/40 = 0.45 -- a lead of
-	// exactly +0.10 stays below switchMargin and must NOT steal the lock.
+	// rival lines: b = = a = = -- a lead of exactly
 	observeAll(ch, bLines[:22])
 	assert.Equal(t, "a", lockedKey(t, ch), "+0.10 is inside the hysteresis margin")
 
-	// 5 more: b = 27/45 = 0.60, a = 18/45 = 0.40 -- a lead of +0.20
-	// clears the margin (and lockRate), so the rival takes the lock.
+	// more: b = = a = = -- a lead of clears the margin
 	observeAll(ch, bLines[22:27])
 	assert.Equal(t, "b", lockedKey(t, ch), "+0.20 steals the lock")
 	assert.Equal(t, "b", ch.Snapshot().Label, "the display follows the switch")
@@ -189,16 +184,14 @@ func TestChooserRivalBelowLockRateCannotSteal(t *testing.T) {
 	observeAll(ch, aLines[:12])
 	assert.Equal(t, "a", lockedKey(t, ch))
 
-	// Interleave noise and rival lines: at counted 60 the rival sits at
-	// 24/60 = 0.40 vs the incumbent's 12/60 = 0.20. The margin is beaten,
-	// but a rival below lockRate must never take the lock.
+	// Interleave noise and rival lines: at counted the
 	for i := 0; i < 24; i++ {
 		ch.Observe(noise[i], time.Time{})
 		ch.Observe(bLines[i], time.Time{})
 	}
 	assert.Equal(t, "a", lockedKey(t, ch), "a sub-lockRate rival cannot steal")
 
-	// Pure rival lines push it over lockRate: 36/72 = 0.5 -> steal.
+	// Pure rival lines push it over lockRate: = -> steal
 	observeAll(ch, bLines[24:39])
 	assert.Equal(t, "b", lockedKey(t, ch))
 }
@@ -235,8 +228,7 @@ func TestChooserTieBreakDeterminism(t *testing.T) {
 			cand("wide", "wide", plainModel(t, lines)),
 		})
 		observeAll(ch, lines)
-		// Both rates are 1.0; the 12-line model's matched weight is 1.0 vs
-		// roughly half for the 24-line superset.
+		// Both rates are the model's matched weight is vs
 		assert.Equal(t, "wide", lockedKey(t, ch))
 	})
 }
@@ -279,8 +271,7 @@ func TestChooserMergeTargetRequiresMergeRate(t *testing.T) {
 	noise := novelLines(16)
 	ch := NewChooser([]Candidate{cand("k", "lbl", plainModel(t, mLines))})
 
-	// Alternating match/noise holds the rate at exactly 0.5: locks at the
-	// window, but display-lock confidence is not merge confidence.
+	// Alternating match/noise holds the rate at exactly
 	for i := 0; i < 16; i++ {
 		ch.Observe(mLines[i], time.Time{})
 		ch.Observe(noise[i], time.Time{})

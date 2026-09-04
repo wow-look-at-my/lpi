@@ -12,6 +12,7 @@ import (
 )
 
 func TestLearnThenModelLifecycle(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 
 	out, _, err := execLpi(t, nil, "learn", "--db", db, "--key", "demo", demoBuild1, demoBuild2)
@@ -26,18 +27,17 @@ func TestLearnThenModelLifecycle(t *testing.T) {
 	assert.Len(t, m.Runs, 2)
 	assert.True(t, m.HasTimes)
 
-	// Learning again appends to the same key.
+	// Learning again appends to the same key
 	out, _, err = execLpi(t, nil, "learn", "--db", db, "--key", "demo", demoPartial)
 	require.NoError(t, err)
 	assert.Contains(t, out, `model "demo": 3 runs,`)
 
-	// --replace starts over.
+	// --replace starts over
 	out, _, err = execLpi(t, nil, "learn", "--db", db, "--key", "demo", "--replace", demoBuild1)
 	require.NoError(t, err)
 	assert.Contains(t, out, `model "demo": 1 runs,`)
 
-	// list shows the key; a model with no recorded invocation shows "-" in
-	// the LABEL column.
+	// list shows the key; a model with no recorded
 	out, _, err = execLpi(t, nil, "model", "list", "--db", db)
 	require.NoError(t, err)
 	assert.Contains(t, out, "KEY")
@@ -45,7 +45,7 @@ func TestLearnThenModelLifecycle(t *testing.T) {
 	assert.Contains(t, out, "demo  -  ")
 	assert.Contains(t, out, "1")
 
-	// show prints per-run rows and merged totals.
+	// show prints per-run rows and merged totals
 	out, _, err = execLpi(t, nil, "model", "show", "--db", db, "demo")
 	require.NoError(t, err)
 	assert.Contains(t, out, "key:  demo")
@@ -54,27 +54,27 @@ func TestLearnThenModelLifecycle(t *testing.T) {
 	assert.Contains(t, out, "yes")
 	assert.Contains(t, out, "merged: 1 runs,")
 
-	// rm deletes the model file.
+	// rm deletes the model file
 	out, _, err = execLpi(t, nil, "model", "rm", "--db", db, "demo")
 	require.NoError(t, err)
 	assert.Contains(t, out, `removed model "demo"`)
 	_, err = os.Stat(model.PathForKey(db, "demo"))
 	assert.True(t, os.IsNotExist(err))
 
-	// list on an empty database.
+	// list on an empty database
 	out, _, err = execLpi(t, nil, "model", "list", "--db", db)
 	require.NoError(t, err)
 	assert.Contains(t, out, "no models in "+db)
 }
 
-// captureContent is a minimal hand-written capture file body: header with a
-// label, then stamp<TAB>text records one second apart.
+// captureContent is a minimal hand-written capture
 const captureContent = "#lpi-capture v1\trescued run\n" +
 	"1000000000\talpha builds\n" +
 	"2000000000\tbeta links\n" +
 	"3000000000\tgamma done\n"
 
 func TestLearnRemovesPendingCaptures(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	require.NoError(t, os.MkdirAll(model.PendingDir(db), 0o755))
 	inside := filepath.Join(model.PendingDir(db), "demo-20260709-120000-1.log")
@@ -100,6 +100,7 @@ func TestLearnRemovesPendingCaptures(t *testing.T) {
 }
 
 func TestLearnFailureKeepsPendingCaptures(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	require.NoError(t, os.MkdirAll(model.PendingDir(db), 0o755))
 	inside := filepath.Join(model.PendingDir(db), "demo-20260709-120000-2.log")
@@ -112,6 +113,7 @@ func TestLearnFailureKeepsPendingCaptures(t *testing.T) {
 }
 
 func TestLearnErrors(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 
 	_, _, err := execLpi(t, nil, "learn", "--db", db, demoBuild1)
@@ -125,6 +127,7 @@ func TestLearnErrors(t *testing.T) {
 }
 
 func TestModelShowNoTimestamps(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 	log := t.TempDir() + "/plain.log"
 	require.NoError(t, os.WriteFile(log, []byte("alpha step\nbeta step\ngamma step\n"), 0o644))
@@ -144,6 +147,7 @@ func TestModelShowNoTimestamps(t *testing.T) {
 }
 
 func TestModelErrors(t *testing.T) {
+	t.Serial()
 	db := t.TempDir()
 
 	_, _, err := execLpi(t, nil, "model", "show", "--db", db, "ghost")

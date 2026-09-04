@@ -1,6 +1,4 @@
-// Package linescan splits a stream into lines without choking on very long
-// ones. Unlike bufio.Scanner, which fails with ErrTooLong, overlong lines are
-// truncated at MaxLine bytes and the remainder is discarded silently.
+// Package linescan splits a stream into lines
 package linescan
 
 import (
@@ -8,14 +6,12 @@ import (
 	"io"
 )
 
-// MaxLine is the maximum length of a returned line in bytes.
-const MaxLine = 1 << 20 // 1 MiB
+// MaxLine is the maximum length of a returned line
+const MaxLine = 1 << 20 // MiB
 
 const bufSize = 64 * 1024
 
-// Scanner yields lines from a reader: it splits on '\n', strips one trailing
-// '\r', and caps lines at MaxLine bytes. A final unterminated line is still
-// yielded. It is implemented as a bufio.Reader ReadSlice loop.
+// Scanner yields lines from a reader: it splits on
 type Scanner struct {
 	r       *bufio.Reader
 	text    string
@@ -24,13 +20,12 @@ type Scanner struct {
 	scratch []byte
 }
 
-// NewScanner returns a Scanner reading from r.
+// NewScanner returns a Scanner reading from r
 func NewScanner(r io.Reader) *Scanner {
 	return &Scanner{r: bufio.NewReaderSize(r, bufSize)}
 }
 
-// Scan advances to the next line. It returns false at end of input or on a
-// read error; check Err afterwards.
+// Scan advances to the next line
 func (s *Scanner) Scan() bool {
 	if s.done {
 		return false
@@ -61,7 +56,7 @@ func (s *Scanner) Scan() bool {
 		if err == nil || err == bufio.ErrBufferFull {
 			continue // more of the same line still buffered
 		}
-		// Terminal condition: EOF or a real read error.
+		// Terminal condition: EOF or a real read error
 		s.done = true
 		if err != io.EOF {
 			s.err = err
@@ -80,8 +75,8 @@ func (s *Scanner) Scan() bool {
 	return true
 }
 
-// Text returns the current line.
+// Text returns the current line
 func (s *Scanner) Text() string { return s.text }
 
-// Err returns the first non-EOF error encountered, if any.
+// Err returns the non-EOF error encountered, if any
 func (s *Scanner) Err() error { return s.err }

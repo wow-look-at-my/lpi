@@ -25,9 +25,7 @@ const (
 	demoPartial = "../../testdata/demo/partial.log"
 )
 
-// resetCommand restores every flag in the tree to its default and clears
-// pflag's sticky '--' position so commands can be executed repeatedly
-// in-process.
+// resetCommand restores every flag in the tree to
 func resetCommand(c *cobra.Command) {
 	c.Flags().Init(c.Name(), pflag.ContinueOnError)
 	reset := func(f *pflag.Flag) {
@@ -45,9 +43,7 @@ func resetCommand(c *cobra.Command) {
 	}
 }
 
-// execLpi runs the root command in-process and returns stdout, stderr, and
-// the execution error. Args pass through routeArgs, so tests exercise the
-// production magic-mode routing.
+// execLpi runs the root command in-process and
 func execLpi(t *testing.T, stdin io.Reader, args ...string) (string, string, error) {
 	t.Helper()
 	resetCommand(rootCmd)
@@ -63,8 +59,7 @@ func execLpi(t *testing.T, stdin io.Reader, args ...string) (string, string, err
 	return out.String(), errOut.String(), err
 }
 
-// seedDemoModel learns the two demo builds into a fresh database directory
-// under key "demo" and returns the directory.
+// seedDemoModel learns the demo builds into a fresh
 func seedDemoModel(t *testing.T) string {
 	t.Helper()
 	db := t.TempDir()
@@ -78,7 +73,7 @@ func seedDemoModel(t *testing.T) string {
 	return db
 }
 
-// loadModel loads a stored model or fails the test.
+// loadModel loads a stored model or fails the test
 func loadModel(t *testing.T, db, key string) *model.Model {
 	t.Helper()
 	m, err := model.Load(model.PathForKey(db, key))
@@ -86,8 +81,7 @@ func loadModel(t *testing.T, db, key string) *model.Model {
 	return m
 }
 
-// pendingFiles lists the capture files under db's pending directory
-// (empty when the directory does not exist).
+// pendingFiles lists the capture files under db's
 func pendingFiles(t *testing.T, db string) []string {
 	t.Helper()
 	dir := model.PendingDir(db)
@@ -103,7 +97,7 @@ func pendingFiles(t *testing.T, db string) []string {
 	return paths
 }
 
-// parseJSONLine unmarshals one JSON object into a generic map.
+// parseJSONLine unmarshals JSON object into a
 func parseJSONLine(t *testing.T, line string) map[string]any {
 	t.Helper()
 	var m map[string]any
@@ -111,7 +105,7 @@ func parseJSONLine(t *testing.T, line string) map[string]any {
 	return m
 }
 
-// forceTTY pins render.IsTTY to a fixed answer for the duration of the test.
+// forceTTY pins render.IsTTY to a fixed answer for
 func forceTTY(t *testing.T, tty bool) {
 	t.Helper()
 	old := render.IsTTY
@@ -119,11 +113,7 @@ func forceTTY(t *testing.T, tty bool) {
 	t.Cleanup(func() { render.IsTTY = old })
 }
 
-// renderScrollback replays raw terminal bytes -- '\n' commits a line, '\r'
-// returns to column 0, and ESC[K erases from the cursor to end of line --
-// and returns each line as it looked when committed, plus the final
-// uncommitted line if any. It reproduces what a terminal's scrollback would
-// have shown for the stream.
+// renderScrollback replays raw terminal bytes
 func renderScrollback(raw string) []string {
 	var lines []string
 	var cur []byte
@@ -157,19 +147,13 @@ func renderScrollback(raw string) []string {
 }
 
 var (
-	// statusMark finds live-status text anywhere in a line; statusFull
-	// requires that text to be the entire line. Glue only ever happens at a
-	// status line's seams, so a marked line that is not a full status line
-	// is exactly the regression: status and child output sharing a line.
+	// statusMark finds live-status text anywhere in a
 	statusMark = regexp.MustCompile(`recording baseline  lines|identifying pattern  lines|\] \d+\.\d%  units `)
 	statusFull = regexp.MustCompile(`^((recording baseline|identifying pattern)  lines \d+(  elapsed \S+)?` +
 		`|\[[=> ]+\] \d+\.\d%  units .*  match \d+%(  ref .*)?)$`)
 )
 
-// assertStatusOwnsLines fails when any rendered terminal line mixes status
-// text with child output (e.g. "...elapsed 3sLocal build detected..."). It
-// also requires at least one intact status line, so the check cannot pass
-// vacuously on output that rendered no status at all.
+// assertStatusOwnsLines fails when any rendered
 func assertStatusOwnsLines(t *testing.T, lines []string) {
 	t.Helper()
 	statuses := 0

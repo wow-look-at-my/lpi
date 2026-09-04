@@ -2,8 +2,7 @@ package timeparse
 
 import "time"
 
-// stripLead skips leading spaces/tabs and one optional '[' (plus any spaces
-// after it), reporting whether a bracket was consumed.
+// stripLead skips leading spaces/tabs and optional
 func stripLead(s string) (string, bool) {
 	i := 0
 	for i < len(s) && (s[i] == ' ' || s[i] == '\t') {
@@ -26,7 +25,7 @@ func isWordByte(c byte) bool {
 	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || isDigit(c)
 }
 
-// fixed parses exactly n digits at s[i:].
+// fixed parses exactly n digits at s[i:]
 func fixed(s string, i, n int) (int, bool) {
 	if i+n > len(s) {
 		return 0, false
@@ -41,9 +40,7 @@ func fixed(s string, i, n int) (int, bool) {
 	return v, true
 }
 
-// frac parses an optional fractional-seconds suffix ('.' or ',' followed by
-// digits) at s[i:], returning nanoseconds and the index just past it. Without
-// a fraction it returns (0, i).
+// frac parses an optional fractional-seconds suffix
 func frac(s string, i int) (int, int) {
 	if i >= len(s) || (s[i] != '.' && s[i] != ',') {
 		return 0, i
@@ -56,7 +53,7 @@ func frac(s string, i int) (int, int) {
 	for j < len(s) && isDigit(s[j]) {
 		ns += int(s[j]-'0') * scale
 		scale /= 10
-		if scale == 0 { // more than 9 digits: ignore the rest
+		if scale == 0 { // more than digits: ignore the rest
 			for j < len(s) && isDigit(s[j]) {
 				j++
 			}
@@ -67,9 +64,7 @@ func frac(s string, i int) (int, int) {
 	return ns, j
 }
 
-// hms parses hh:mm:ss with an optional fraction at s[i:]. With flexHour the
-// hour may be a single digit. It returns the components and the index just
-// past what was consumed.
+// hms parses hh:mm:ss with an optional fraction at
 func hms(s string, i int, flexHour bool) (h, m, sec, ns, end int, ok bool) {
 	h = -1
 	if v, vok := fixed(s, i, 2); vok && i+2 < len(s) && s[i+2] == ':' {
@@ -101,7 +96,7 @@ func hms(s string, i int, flexHour bool) (h, m, sec, ns, end int, ok bool) {
 	return h, m, sec, ns, i, true
 }
 
-// parseYMD parses yyyy<sep>mm<sep>dd at the start of s.
+// parseYMD parses yyyy<sep>mm<sep>dd at the start
 func parseYMD(s string, sep byte) (int, time.Month, int, bool) {
 	if len(s) < 10 || s[4] != sep || s[7] != sep {
 		return 0, 0, 0, false
@@ -115,8 +110,7 @@ func parseYMD(s string, sep byte) (int, time.Month, int, bool) {
 	return y, time.Month(mo), d, true
 }
 
-// parseZone parses an optional trailing zone ('Z' or +hh:mm / -hh:mm) at
-// s[i:]. Malformed or absent zones fall back to UTC.
+// parseZone parses an optional trailing zone ('Z'
 func parseZone(s string, i int) *time.Location {
 	if i >= len(s) || (s[i] != '+' && s[i] != '-') {
 		return time.UTC
@@ -136,9 +130,7 @@ func parseZone(s string, i int) *time.Location {
 	return time.FixedZone("", off)
 }
 
-// parseISO handles ISO-8601 / RFC3339: 2026-07-02T15:04:05 with optional
-// .frac/,frac and optional Z/+hh:mm/-hh:mm; a space may stand in for 'T'
-// (python's "2026-07-02 15:04:05,123").
+// parseISO handles / with optional .frac/,frac and
 func parseISO(s string) (time.Time, bool) {
 	y, mo, d, ok := parseYMD(s, '-')
 	if !ok || len(s) < 12 || (s[10] != 'T' && s[10] != ' ') {
@@ -151,7 +143,7 @@ func parseISO(s string) (time.Time, bool) {
 	return time.Date(y, mo, d, h, mi, sec, ns, parseZone(s, end)), true
 }
 
-// parseGoLog handles the Go log default: 2026/07/02 15:04:05 (optional frac).
+// parseGoLog handles the Go log default: (optional
 func parseGoLog(s string) (time.Time, bool) {
 	y, mo, d, ok := parseYMD(s, '/')
 	if !ok || len(s) < 12 || s[10] != ' ' {
@@ -171,8 +163,7 @@ var syslogMonths = map[string]time.Month{
 	"Oct": time.October, "Nov": time.November, "Dec": time.December,
 }
 
-// parseSyslog handles the classic syslog stamp: "Jan  2 15:04:05". There is
-// no year; the base year 2000 is used (only differences matter).
+// parseSyslog handles the classic syslog stamp
 func parseSyslog(s string) (time.Time, bool) {
 	if len(s) < 4 || s[3] != ' ' {
 		return time.Time{}, false
@@ -204,8 +195,7 @@ func parseSyslog(s string) (time.Time, bool) {
 	return time.Date(2000, mo, d, h, mi, sec, ns, time.UTC), true
 }
 
-// parseClock handles bare times: 15:04:05 with optional fraction. The hour
-// may be a single digit. Midnight rollover is applied by the caller.
+// parseClock handles bare times: with optional
 func parseClock(s string) (time.Time, bool) {
 	h, mi, sec, ns, _, ok := hms(s, 0, true)
 	if !ok {
@@ -216,18 +206,16 @@ func parseClock(s string) (time.Time, bool) {
 }
 
 const (
-	epochMinSec = 1_400_000_000 // ~2014
-	epochMaxSec = 2_600_000_000 // ~2052
+	epochMinSec = 1_400_000_000 //
+	epochMaxSec = 2_600_000_000 //
 )
 
-// parseEpoch handles a Unix epoch at line start: exactly 10 digits in the
-// plausible seconds range, or exactly 13 digits whose seconds value falls in
-// the same range (milliseconds).
+// parseEpoch handles a Unix epoch at line start
 func parseEpoch(s string) (time.Time, bool) {
 	n := 0
 	var v int64
 	for n < len(s) && isDigit(s[n]) {
-		if n < 14 { // enough for 13 digits; longer runs are rejected below
+		if n < 14 { // enough for digits; longer runs are rejected below
 			v = v*10 + int64(s[n]-'0')
 		}
 		n++
@@ -250,8 +238,7 @@ func parseEpoch(s string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-// parseDmesg handles dmesg-style relative stamps: "[   12.345678]". The
-// leading bracket (already consumed by stripLead) is required.
+// parseDmesg handles dmesg-style relative stamps
 func parseDmesg(s string, bracket bool) (time.Time, bool) {
 	if !bracket {
 		return time.Time{}, false
