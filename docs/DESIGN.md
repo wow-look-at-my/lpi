@@ -1,4 +1,4 @@
-# log-progress-indicator -- design
+# lpi -- design
 
 `lpi` answers the question "how far along is this long-running task?" by
 comparing the task's partial log output against reference logs from previous

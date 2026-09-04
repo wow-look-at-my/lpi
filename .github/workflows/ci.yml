@@ -17,4 +17,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Autorelease auto-provisions the project with an empty description, and
+      # description is settable only at create time. Creating it here first is
+      # what puts real text in the brew formula's desc and homepage.
+      - name: Ensure the buildhost project exists with its description
+        uses: wow-look-at-my/buildhost/.github/actions/buildhost-create-project@master
+        with:
+          name: lpi
+          description: Estimate task progress by matching a live log against past completed runs
+          homepage: https://github.com/wow-look-at-my/lpi
+          license: MIT
       - uses: wow-look-at-my/go-toolchain@master

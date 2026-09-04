@@ -3,7 +3,7 @@ package progress
 import (
 	"time"
 
-	"github.com/wow-look-at-my/log-progress-indicator/internal/model"
+	"github.com/wow-look-at-my/lpi/internal/model"
 )
 
 // Candidate is stored pattern offered to the Chooser

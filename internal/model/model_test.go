@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/wow-look-at-my/log-progress-indicator/internal/fingerprint"
+	"github.com/wow-look-at-my/lpi/internal/fingerprint"
 )
 
 func expectOf(t *testing.T, m *Model, line string) []Occurrence {

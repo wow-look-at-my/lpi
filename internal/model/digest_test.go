@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/wow-look-at-my/log-progress-indicator/internal/fingerprint"
-	"github.com/wow-look-at-my/log-progress-indicator/internal/timeparse"
+	"github.com/wow-look-at-my/lpi/internal/fingerprint"
+	"github.com/wow-look-at-my/lpi/internal/timeparse"
 )
 
 var digestBase = time.Date(2026, 7, 2, 10, 0, 0, 0, time.UTC)

@@ -4,8 +4,8 @@ package progress
 import (
 	"time"
 
-	"github.com/wow-look-at-my/log-progress-indicator/internal/fingerprint"
-	"github.com/wow-look-at-my/log-progress-indicator/internal/model"
+	"github.com/wow-look-at-my/lpi/internal/fingerprint"
+	"github.com/wow-look-at-my/lpi/internal/model"
 )
 
 // Snapshot is a point-in-time progress estimate

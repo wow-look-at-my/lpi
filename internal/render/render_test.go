@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/wow-look-at-my/log-progress-indicator/internal/progress"
+	"github.com/wow-look-at-my/lpi/internal/progress"
 )
 
 // fullSnap mirrors the documented example snapshot

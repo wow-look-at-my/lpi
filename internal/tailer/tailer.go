@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/wow-look-at-my/log-progress-indicator/internal/linescan"
+	"github.com/wow-look-at-my/lpi/internal/linescan"
 )
 
 // DefaultInterval is the poll interval used when
