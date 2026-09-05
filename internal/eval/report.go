@@ -56,7 +56,7 @@ func writeCheckpoints(w io.Writer, r *Result) {
 func writeVerdict(w io.Writer, rs []*Result, o Overall) {
 	fmt.Fprintf(w, "verdict: %s -- progress is off by %.1f%% on average", o.Grade(), pct(o.MeanAbsErr))
 	if o.ETARuns > 0 {
-		fmt.Fprintf(w, ", and the ETA by %.0f%% of the time actually left", o.ETAMeanRelErr*100)
+		fmt.Fprintf(w, ", and the ETA by %.0f%% of the run's own length", o.ETAMeanRunErr*100)
 	}
 	fmt.Fprintln(w, ".")
 	if o.SelfFit {
@@ -82,14 +82,14 @@ func etaCell(r *Result) string {
 	if r.ETAPoints == 0 {
 		return "-"
 	}
-	return fmt.Sprintf("%.0f%%", r.ETAMeanRelErr*100)
+	return fmt.Sprintf("%.0f%%", r.ETAMeanRunErr*100)
 }
 
 func etaOverall(o Overall) string {
 	if o.ETARuns == 0 {
 		return "-"
 	}
-	return fmt.Sprintf("%.0f%%", o.ETAMeanRelErr*100)
+	return fmt.Sprintf("%.0f%%", o.ETAMeanRunErr*100)
 }
 
 func pct(f float64) float64 { return f * 100 }
@@ -124,6 +124,7 @@ type JSONResult struct {
 	WorstAt       float64          `json:"err_max_at"`
 	Bias          float64          `json:"err_bias"`
 	ETAMeanRelErr float64          `json:"eta_rel_err,omitempty"`
+	ETAMeanRunErr float64          `json:"eta_run_err,omitempty"`
 	ETAMeanAbsSec float64          `json:"eta_abs_err_seconds,omitempty"`
 	Grade         string           `json:"grade"`
 	Checkpoints   []JSONCheckpoint `json:"checkpoints"`
@@ -147,8 +148,9 @@ func JSON(r *Result) JSONResult {
 		MatchRate: r.MatchRate, Confidence: r.Confidence, FinalProgress: r.FinalPred,
 		MeanAbsErr: r.MeanAbsErr, MedAbsErr: r.MedAbsErr, P90AbsErr: r.P90AbsErr,
 		MaxAbsErr: r.MaxAbsErr, WorstAt: r.WorstAt, Bias: r.Bias,
-		ETAMeanRelErr: r.ETAMeanRelErr, ETAMeanAbsSec: r.ETAMeanAbsErr.Seconds(),
-		Grade: r.Grade(),
+		ETAMeanRelErr: r.ETAMeanRelErr, ETAMeanRunErr: r.ETAMeanRunErr,
+		ETAMeanAbsSec: r.ETAMeanAbsErr.Seconds(),
+		Grade:         r.Grade(),
 	}
 	for _, p := range r.Checkpoints {
 		c := JSONCheckpoint{Truth: p.Truth, Pred: p.Pred, Err: p.Err(), Pace: p.Pace}
@@ -165,7 +167,7 @@ func JSON(r *Result) JSONResult {
 func Verdict(o Overall) string {
 	parts := []string{fmt.Sprintf("progress off by %.1f%% on average", o.MeanAbsErr*100)}
 	if o.ETARuns > 0 {
-		parts = append(parts, fmt.Sprintf("eta off by %.0f%% of the time left", o.ETAMeanRelErr*100))
+		parts = append(parts, fmt.Sprintf("eta off by %.0f%% of the run's length", o.ETAMeanRunErr*100))
 	}
 	if o.SelfFit {
 		parts = append(parts, "scored against itself, so optimistic")
