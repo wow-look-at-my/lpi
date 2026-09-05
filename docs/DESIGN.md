@@ -611,7 +611,7 @@ stays well-formed.
 
     type Target struct{ Path string; Run *model.Run }
     type Point struct{ Line int; Truth, Pred float64; ETA, TrueLeft time.Duration; ETAKind string; Pace float64; Elapsed time.Duration }
-    type Result struct{ ... } // per-log scores: MeanAbsErr, MedAbsErr, P90AbsErr, MaxAbsErr, WorstAt, Bias, ETAMeanRelErr, Checkpoints
+    type Result struct{ ... } // per-log scores: MeanAbsErr, MedAbsErr, P90AbsErr, MaxAbsErr, WorstAt, Bias, ETAMeanRelErr, ETAMeanRunErr, Checkpoints
     type Overall struct{ ... } // suite averages
     func LeaveOneOut(targets []Target, format *timeparse.Format) ([]*Result, error)
     func Against(m *model.Model, targets []Target, format *timeparse.Format) ([]*Result, error)
@@ -628,9 +628,23 @@ for an unstamped line, monotonic clamp, empty-normalized lines skipped) so the
 replay sees exactly the times the digest was built from. At every counted line
 it compares the estimate with the truth the log itself carries: its share of
 the run's own clock when the log is timed, else its share of the line count.
-The signed error feeds mean, median, p90, max and bias; the ETA feeds a mean
-relative error against the time really left. `Checkpoints` keeps the first
-estimate at or past each tenth of the run, plus a final row.
+The signed error feeds mean, median, p90, max and bias. `Checkpoints` keeps the
+first estimate at or past each tenth of the run, plus a final row.
+
+Truth being the run's OWN clock is what makes the progress error a fair score
+across runs of different length: a machine that takes half as long is still
+halfway at halfway, and lpi is neither credited nor charged for that. A run
+that is slow in ONE PLACE does move truth away from the reference's shape, and
+that error is charged in full -- `TestScoreSlowerRunIsBehindTheReference` pins
+the direction.
+
+The ETA gets two errors, because the obvious one is a trap. `ETAMeanRelErr`
+divides each miss by the time still left, so a miss in the final seconds
+divides by nearly zero and dominates the mean: a run whose ETA is within 6% for
+its first half can still report a mean in the thousands. `ETAMeanRunErr`
+divides the same misses by the run's whole length, which weighs a miss the same
+wherever it happened. The report and the verdict use `ETAMeanRunErr`; both ride
+the JSON, as `eta_run_err` and `eta_rel_err`.
 
 `LeaveOneOut` scores each target against a model built from the others, which
 is the only honest read on an unseen run. A lone target is scored against

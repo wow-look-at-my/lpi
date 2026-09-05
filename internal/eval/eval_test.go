@@ -126,6 +126,22 @@ func TestScoreSlowerRunIsBehindTheReference(t *testing.T) {
 	assert.Positive(t, r.ETAMeanRelErr)
 }
 
+// The reported ETA error must not be the kind a miss in the final seconds can
+// send to any value it likes.
+func TestETAErrorOfTheRunIsNotDominatedByTheLastSeconds(t *testing.T) {
+	fast := writeLog(t, "fast.log", 40, 10*time.Second)
+	slow := writeLog(t, "slow.log", 40, 20*time.Second)
+	m := model.New("stored")
+	m.AddRun(target(t, fast).Run)
+
+	results, err := Against(m, []Target{target(t, slow)}, nil)
+	require.NoError(t, err)
+	r := results[0]
+	assert.Less(t, r.ETAMeanRunErr, r.ETAMeanRelErr,
+		"dividing by the time left inflates a miss near the end; dividing by the run does not")
+	assert.Less(t, r.ETAMeanRunErr, 1.0, "a miss cannot exceed the run it happened in by much")
+}
+
 func TestScoreRejectsShortAndMissingInput(t *testing.T) {
 	_, err := Score(model.New("m"), Target{Path: "nope.log"}, nil)
 	assert.ErrorContains(t, err, "no digest")

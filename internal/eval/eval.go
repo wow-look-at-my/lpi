@@ -62,7 +62,10 @@ type Result struct {
 	// ETA errors cover the points where an ETA was
 	ETAPoints     int
 	ETAMeanAbsErr time.Duration
+	// Each miss over the time still left, so the final seconds dominate it.
 	ETAMeanRelErr float64
+	// The same misses over the run's length: every miss weighs the same.
+	ETAMeanRunErr float64
 
 	Checkpoints []Point
 }
@@ -172,6 +175,7 @@ type scorer struct {
 	sumErr   float64
 	etaAbs   time.Duration
 	etaRel   float64
+	etaRun   float64
 	etaCount int
 	next     int
 	last     progress.Snapshot
@@ -200,7 +204,11 @@ func (s *scorer) line(text string, at time.Time) {
 			p.ETA = snap.ETA
 			s.etaAbs += absDuration(p.ETA - p.TrueLeft)
 			if p.TrueLeft > 0 {
-				s.etaRel += math.Abs(float64(p.ETA-p.TrueLeft)) / float64(p.TrueLeft)
+				miss := math.Abs(float64(p.ETA - p.TrueLeft))
+				s.etaRel += miss / float64(p.TrueLeft)
+				if s.run.Duration > 0 {
+					s.etaRun += miss / float64(s.run.Duration)
+				}
 				s.etaCount++
 			}
 		}
@@ -284,6 +292,7 @@ func (s *scorer) finish() *Result {
 		r.ETAPoints = s.etaCount
 		r.ETAMeanAbsErr = s.etaAbs / time.Duration(s.etaCount)
 		r.ETAMeanRelErr = s.etaRel / float64(s.etaCount)
+		r.ETAMeanRunErr = s.etaRun / float64(s.etaCount)
 	}
 	// The last line ends the run, so the report always carries a final row even
 	// when the log's clock stops short of the last mark.
@@ -305,6 +314,7 @@ type Overall struct {
 	WorstAbsErr   float64
 	MatchRate     float64
 	ETAMeanRelErr float64
+	ETAMeanRunErr float64
 	ETARuns       int
 }
 
@@ -325,6 +335,7 @@ func Aggregate(rs []*Result) Overall {
 		o.SelfFit = o.SelfFit || r.SelfFit
 		if r.ETAPoints > 0 {
 			o.ETAMeanRelErr += r.ETAMeanRelErr
+			o.ETAMeanRunErr += r.ETAMeanRunErr
 			o.ETARuns++
 		}
 	}
@@ -332,6 +343,7 @@ func Aggregate(rs []*Result) Overall {
 	o.MatchRate /= float64(len(rs))
 	if o.ETARuns > 0 {
 		o.ETAMeanRelErr /= float64(o.ETARuns)
+		o.ETAMeanRunErr /= float64(o.ETARuns)
 	}
 	return o
 }

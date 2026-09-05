@@ -99,8 +99,10 @@ testdata/demo/         two complete fake cmake builds + a ~55% partial run,
   the estimator (model.ReplayFile), and scores every estimate against the
   log's own truth. Several logs are scored leave-one-out; a lone log is
   self-fit and says so; `--key` scores against a stored model, `--learn`
-  ingests afterwards, `--detail`/`--json` widen the report. Depth:
-  docs/DESIGN.md, "internal/eval".
+  ingests afterwards, `--detail`/`--json` widen the report. Truth is the log's
+  own clock, so a uniformly slower run costs nothing; the reported ETA error
+  measures each miss against the run's length, never against the time left
+  (that one is all tail). Depth: docs/DESIGN.md, "internal/eval".
 - Stamp reading is pinnable: learn/analyze/watch (and any `--ref` log) take
   `--format` (auto, a builtin name, or a regex with named groups) plus
   `--time-layout`; nil format means detect. A missed line carries the

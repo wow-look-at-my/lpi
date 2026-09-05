@@ -109,6 +109,7 @@ type evalJSON struct {
 	WorstAbsErr   float64           `json:"err_max"`
 	MatchRate     float64           `json:"match_rate"`
 	ETAMeanRelErr float64           `json:"eta_rel_err,omitempty"`
+	ETAMeanRunErr float64           `json:"eta_run_err,omitempty"`
 	SelfFit       bool              `json:"self_fit"`
 	Grade         string            `json:"grade"`
 	Verdict       string            `json:"verdict"`
@@ -118,7 +119,7 @@ func writeEvalJSON(w io.Writer, results []*eval.Result) error {
 	o := eval.Aggregate(results)
 	doc := evalJSON{
 		MeanAbsErr: o.MeanAbsErr, WorstAbsErr: o.WorstAbsErr, MatchRate: o.MatchRate,
-		ETAMeanRelErr: o.ETAMeanRelErr, SelfFit: o.SelfFit,
+		ETAMeanRelErr: o.ETAMeanRelErr, ETAMeanRunErr: o.ETAMeanRunErr, SelfFit: o.SelfFit,
 		Grade: o.Grade(), Verdict: eval.Verdict(o),
 	}
 	for _, r := range results {

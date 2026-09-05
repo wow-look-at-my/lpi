@@ -213,15 +213,19 @@ lpi eval build1.log build2.log build3.log
 
 ```
 log                         lines  duration  err avg  err p90  err max   eta err   match
-testdata/demo/build1.log      106     5m09s     1.6%     3.0%     3.9%       11%     99%
-testdata/demo/build2.log      107     5m14s     1.2%     2.7%     3.9%        4%     98%
-all                                             1.4%              3.9%        7%     99%
+testdata/demo/build1.log      106     5m09s     1.4%     2.8%     3.9%        3%     99%
+testdata/demo/build2.log      107     5m14s     1.2%     2.7%     3.9%        2%     98%
+all                                             1.3%              3.9%        2%     99%
 
-verdict: excellent -- progress is off by 1.4% on average, and the ETA by 7% of the time actually left.
+verdict: excellent -- progress is off by 1.3% on average, and the ETA by 2% of the run's own length.
 ```
 
 `err` is how far the reported percentage sat from the truth the log itself
-records -- its own clock, or its line count when it carries no timestamps.
+records -- its own clock, or its line count when it carries no timestamps. So a
+run that simply took longer than the reference is not counted against the
+percentage: being halfway is being halfway, whatever the machine's speed. Where
+that difference does land is `eta err`, which measures each ETA miss against the
+length of the run it was made in.
 `--detail` prints what lpi would have said at each tenth of the run, next to
 what was really true at that moment:
 
