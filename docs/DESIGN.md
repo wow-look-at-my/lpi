@@ -101,7 +101,7 @@ The lifecycle is a small state machine over cumulative match rates (matched/curr
 - **Locked.** A rival steals the lock only at `lockRate` or better AND `switchMargin` above the locked candidate's rate. The margin is hysteresis. Without it, sibling patterns with heavy overlap flap the lock back and forth line by line, and the label with it.
 - **Ties** break deterministically. The order is higher rate, then higher matched weight, then more runs in the model, then the lexicographically smaller key.
 
-Rationale for the two-bar design: locking is a *display* decision. Being provisionally wrong costs a mislabeled status line that the next lines correct, so it can afford `lockRate` 0.5. Merging a run into the wrong pattern corrupts stored state, so the merge bar is higher. `mergeRate` 0.6 aligns with the "medium" confidence boundary. Below that the estimate itself is labeled untrustworthy, and a run the estimator does not trust has no business as reference data.
+Rationale for the two-bar design: locking is a *display* decision. Being provisionally wrong costs a mislabeled status line that the next lines correct. That bar can afford `lockRate` 0.5. Merging a run into the wrong pattern corrupts stored state, so the merge bar is higher. `mergeRate` 0.6 aligns with the "medium" confidence boundary. Below that the estimate itself is labeled untrustworthy, and a run the estimator does not trust has no business as reference data.
 
 ### Status surface
 
@@ -292,7 +292,7 @@ Digester rules:
 
 - For each fingerprint, per-run counts (absent = 0) sort ascending and the expected count is `counts[n/2]`, the upper median. With 2 runs that takes the max. This protects against a single incremental or short run dropping everything. Fingerprints with expected count 0 are omitted.
 - For occurrence index k, `TimeFrac`/`WeightFrac` are the mean over the runs that have that occurrence, taken in SECONDS. Each run's stored fractions are shares of ITS OWN duration. `runScales` multiplies them by that duration first, scaling a run with no clock by `RefDuration`. Merging the raw fractions is what made a truncated reference catastrophic. A log covering a tenth of the work states per-line shares ten times too large. Averaging those at face value moved the model's mass to the opening minutes.
-- The merged weight then scales by `support`, the share of the runs able to print that line that did. A line only one run in four prints is only that often expected of the next one. It holds a quarter of the weight instead of a full share the next run can never claim. A run that ends before the occurrence's time never had the chance to print it, so it does not count against it. A short log reads as short, not as different.
+- The merged weight then scales by `support`, the share of the runs able to print that line that did. A line only one run in four prints is only that often expected of the next one. It holds a quarter of the weight instead of a full share the next run can never claim. A run that ends before the occurrence's time never had the chance to print it. The absence does not count against it. A short log reads as short, not as different.
 - All `WeightFrac` renormalize so the grand total is 1, and `TimeFrac` divides back by `RefDuration`, clamped to 1. `Timeline` lists every expected occurrence sorted by `TimeFrac`. That is what the estimator walks to retire work a live run has gone past.
 - `TotalUnits` = sum of expected counts. `RefDuration` = upper-median duration among runs with `HasTimes`, 0 if none. `HasTimes` = any run has times.
 
