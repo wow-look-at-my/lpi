@@ -508,10 +508,29 @@ the available-keys error listing never mistake them for models.
   takes the max. This protects against a single incremental or short run
   dropping everything. Fingerprints with expected count 0 are omitted.
 - For occurrence index k, `TimeFrac`/`WeightFrac` are the mean over the runs
-  that have that occurrence. All `WeightFrac` are then renormalized so the
-  grand total is 1.
+  that have that occurrence, taken in SECONDS: each run's stored fractions are
+  shares of ITS OWN duration, so they are multiplied by that duration first
+  (`runScales`; a run with no clock is scaled by `RefDuration`). Merging the
+  raw fractions is what made a truncated reference catastrophic -- a log
+  covering a tenth of the work states per-line shares ten times too large, and
+  averaging them at face value moved the model's mass to the opening minutes.
+- The merged weight is then scaled by `support`: the share of the runs that
+  could have printed that line and did. A line only one run in four prints is
+  only that often expected of the next one, so it holds a quarter of the
+  weight instead of a full share the next run can never claim. A run that ends
+  before the occurrence's time never had the chance to print it and does not
+  count against it, so a short log is treated as short, not as different.
+- All `WeightFrac` are renormalized so the grand total is 1, and `TimeFrac` is
+  divided back by `RefDuration` (clamped to 1). `Timeline` lists every expected
+  occurrence sorted by `TimeFrac`, which is what the estimator walks to retire
+  work a live run has gone past.
 - `TotalUnits` = sum of expected counts. `RefDuration` = upper-median duration
   among runs with `HasTimes` (0 if none). `HasTimes` = any run has times.
+
+The merge is measured by `internal/eval`'s corpus tests, which score one
+holdout against models differing only in what was learned: a second reference
+must never raise the error, a truncated reference must not bias the estimate
+upward, and a finished run must read as finished.
 
 Persistence: `Save` writes a gzip-compressed gob envelope
 `{Version: 1, Key, Runs}` (creating parent directories as needed),
@@ -569,7 +588,17 @@ occurrences remaining -> match (units done +1, weight done += that
 occurrence's `WeightFrac`); known but exhausted -> overflow. `firstAt`/`lastAt`
 are tracked from non-zero `at` values (`Tick` updates `lastAt` only, and the
 clock never moves backwards); `Elapsed = lastAt - firstAt` once both are set.
-`Progress = min(weightDone, 1)`. ETA, pace, and confidence follow the core
+`Progress = min(weightDone / (1 - skipped), 1)`, where `skipped` is the weight
+of expected occurrences the run has demonstrably gone past without printing.
+The run's position on the reference is the earliest `TimeFrac` among its last
+`windowFor(TotalUnits)` matches (8..32, a share of the model), never moving
+backwards; every `Timeline` entry behind it that is still unmatched is retired
+into `skipped`, and reclaimed if it turns up late. Taking the earliest of the
+window rather than the latest match is what keeps a stray or out-of-order
+match from declaring the run nearly done. Without this, a run that does not do
+some of the reference's work can never reach 100%: the error was one-sided,
+always an undercount, and its size tracked how much of the reference the run
+never printed. ETA, pace, and confidence follow the core
 algorithm rules above.
 
 An empty model (`TotalUnits == 0`, as used by the live-learning bootstrap)
