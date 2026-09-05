@@ -2,6 +2,7 @@
 package progress
 
 import (
+	"slices"
 	"time"
 
 	"github.com/wow-look-at-my/lpi/internal/fingerprint"
@@ -29,6 +30,8 @@ type Snapshot struct {
 
 	MatchRate  float64
 	Confidence string // "high" | "medium" | "low" | "none"
+	// Skipped is the share of the reference this run went past without
+	Skipped float64
 
 	// Identifying is set by the Chooser while it is
 	Identifying bool
@@ -36,6 +39,19 @@ type Snapshot struct {
 	Label string
 
 	CurrentLines, MatchedLines, NovelLines, OverflowLines int
+}
+
+// The position is the earliest recent match, so a stray match ahead cannot
+// drag the run forward. The window scales with the reference.
+const (
+	windowMax   = 32
+	windowMin   = 8
+	windowShare = 8
+)
+
+// windowFor sizes the position window for a reference of the given length.
+func windowFor(units int) int {
+	return min(windowMax, max(windowMin, units/windowShare))
 }
 
 // Estimator consumes live log lines and tracks
@@ -49,11 +65,19 @@ type Estimator struct {
 	overflow   int
 	firstAt    time.Time
 	lastAt     time.Time
+
+	// position is how far into the reference the run has been seen to reach,
+	position float64
+	skipped  float64
+	window   []float32
+	span     int
+	cursor   int
 }
 
 // NewEstimator returns an Estimator matching
 func NewEstimator(m *model.Model) *Estimator {
-	return &Estimator{m: m, seen: make(map[uint64]int)}
+	span := windowFor(m.TotalUnits)
+	return &Estimator{m: m, seen: make(map[uint64]int), span: span, window: make([]float32, 0, span)}
 }
 
 // Observe feeds live log line, stamped with the
@@ -70,9 +94,11 @@ func (e *Estimator) Observe(line string, at time.Time) {
 		e.novel++
 	case e.seen[fp] < len(occs):
 		// The k-th occurrence in the current log matches
-		e.weightDone += float64(occs[e.seen[fp]].WeightFrac)
+		o := occs[e.seen[fp]]
+		e.weightDone += float64(o.WeightFrac)
 		e.seen[fp]++
 		e.matched++
+		e.advance(o)
 	default:
 		e.overflow++
 	}
@@ -81,6 +107,37 @@ func (e *Estimator) Observe(line string, at time.Time) {
 			e.firstAt = at
 		}
 		e.bumpClock(at)
+	}
+}
+
+// advance moves the run's position along the reference and retires the
+// expectations it has gone past. A reference line this run never printed is
+// work this run does not do, so its share stops counting against the estimate
+// rather than capping the bar below the end.
+func (e *Estimator) advance(matched model.Occurrence) {
+	if float64(matched.TimeFrac) < e.position {
+		e.skipped -= float64(matched.WeightFrac) // it arrived after all
+	}
+	if len(e.window) < e.span {
+		e.window = append(e.window, matched.TimeFrac)
+	} else {
+		copy(e.window, e.window[1:])
+		e.window[len(e.window)-1] = matched.TimeFrac
+	}
+	if len(e.window) < e.span {
+		return // too few matches to place the run yet
+	}
+	behind := float64(slices.Min(e.window))
+	if behind <= e.position {
+		return
+	}
+	e.position = behind
+	for e.cursor < len(e.m.Timeline) && float64(e.m.Timeline[e.cursor].At) < e.position {
+		p := e.m.Timeline[e.cursor]
+		if e.seen[p.FP] <= p.Idx {
+			e.skipped += float64(p.Weight)
+		}
+		e.cursor++
 	}
 }
 
@@ -118,7 +175,12 @@ func (e *Estimator) Snapshot() Snapshot {
 		NovelLines:    e.novel,
 		OverflowLines: e.overflow,
 	}
+	// Retired expectations leave the denominator.
+	s.Skipped = e.skipped
 	s.Progress = e.weightDone
+	if reachable := 1 - e.skipped; reachable > 0 {
+		s.Progress /= reachable
+	}
 	if s.Progress > 1 {
 		s.Progress = 1
 	}

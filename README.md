@@ -308,7 +308,12 @@ up, so anything there is recoverable data.
    of racing to 99% early.
 4. **Merging runs.** Up to 8 reference runs merge per key: expected counts
    take the upper median across runs (so one aborted or incremental run
-   cannot drop lines), occurrence times are averaged, weights renormalized.
+   cannot drop lines), times and weights are averaged in seconds rather than
+   in each run's own fractions (so a log cut short cannot inflate its share
+   of the work), and each line's weight is scaled by how many of the runs
+   actually print it -- one run's quirks do not become work the next run owes.
+   Adding a reference is meant to help or do nothing; `lpi eval` is how that
+   is checked.
 5. **ETA.** pace = elapsed / (progress x reference-duration); ETA =
    remaining-weight x reference-duration x pace, with the pace correction
    shrunk toward the reference in proportion to the progress behind it -- a

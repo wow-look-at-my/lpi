@@ -1,6 +1,7 @@
 package model
 
 import (
+	"cmp"
 	"encoding/binary"
 	"fmt"
 	"hash/fnv"
@@ -32,6 +33,17 @@ type Model struct {
 	RefDuration time.Duration
 	// HasTimes reports whether any run has usable times
 	HasTimes bool
+	// Timeline lists every expected occurrence in the order the reference
+	Timeline []Point
+}
+
+// Point places an expected occurrence on the reference timeline, so a live
+// run can tell which expectations it has gone past.
+type Point struct {
+	FP     uint64
+	Idx    int
+	At     float32
+	Weight float32
 }
 
 // New returns an empty model for key
@@ -98,6 +110,8 @@ func (m *Model) Rebuild() {
 	if n == 0 {
 		return
 	}
+	m.deriveDuration()
+	scales, norm := m.runScales()
 	var fps []uint64
 	for _, r := range m.Runs {
 		for fp := range r.Occ {
@@ -117,50 +131,108 @@ func (m *Model) Rebuild() {
 		if expect == 0 {
 			continue
 		}
-		m.Expect[fp] = m.mergeOccurrences(fp, expect)
+		m.Expect[fp] = m.mergeOccurrences(fp, expect, scales)
 		m.TotalUnits += expect
 	}
-	m.renormalizeWeights()
-	m.deriveDuration()
+	m.renormalize(norm)
+	m.buildTimeline()
 }
 
-// mergeOccurrences averages occurrence k's
-func (m *Model) mergeOccurrences(fp uint64, expect int) []Occurrence {
+// buildTimeline lays every expected occurrence out in reference order.
+func (m *Model) buildTimeline() {
+	m.Timeline = make([]Point, 0, m.TotalUnits)
+	for fp, occs := range m.Expect {
+		for i, o := range occs {
+			m.Timeline = append(m.Timeline, Point{FP: fp, Idx: i, At: o.TimeFrac, Weight: o.WeightFrac})
+		}
+	}
+	slices.SortFunc(m.Timeline, func(a, b Point) int {
+		if a.At != b.At {
+			return cmp.Compare(a.At, b.At)
+		}
+		if a.FP != b.FP {
+			return cmp.Compare(a.FP, b.FP)
+		}
+		return cmp.Compare(a.Idx, b.Idx)
+	})
+}
+
+// runScales returns the factor that turns each run's fractions into seconds,
+// plus the divisor that turns seconds back into fractions of the merged run.
+// A run's fractions are shares of ITS duration, so a log covering a sliver of
+// the work states shares that are far too large.
+func (m *Model) runScales() ([]float64, float64) {
+	norm := m.RefDuration.Seconds()
+	if norm <= 0 {
+		norm = 1
+	}
+	scales := make([]float64, len(m.Runs))
+	for i, r := range m.Runs {
+		scales[i] = norm
+		if r.HasTimes && r.Duration > 0 {
+			scales[i] = r.Duration.Seconds()
+		}
+	}
+	return scales, norm
+}
+
+// mergeOccurrences averages occurrence k across the runs that have it, in
+// seconds, and scales the weight by the share of runs that print the line at
+// all: work only some runs do is only that often expected of the next.
+func (m *Model) mergeOccurrences(fp uint64, expect int, scales []float64) []Occurrence {
 	occs := make([]Occurrence, expect)
 	for k := 0; k < expect; k++ {
 		var tf, wf float64
 		cnt := 0
-		for _, r := range m.Runs {
+		for i, r := range m.Runs {
 			if list := r.Occ[fp]; k < len(list) {
-				tf += float64(list[k].TimeFrac)
-				wf += float64(list[k].WeightFrac)
+				tf += float64(list[k].TimeFrac) * scales[i]
+				wf += float64(list[k].WeightFrac) * scales[i]
 				cnt++
 			}
 		}
-		if cnt > 0 {
-			occs[k] = Occurrence{
-				TimeFrac:   float32(tf / float64(cnt)),
-				WeightFrac: float32(wf / float64(cnt)),
-			}
+		if cnt == 0 {
+			continue
+		}
+		at := tf / float64(cnt)
+		occs[k] = Occurrence{
+			TimeFrac:   float32(at),
+			WeightFrac: float32(wf / float64(cnt) * support(cnt, at, scales)),
 		}
 	}
 	return occs
 }
 
-// renormalizeWeights scales all WeightFrac so their
-func (m *Model) renormalizeWeights() {
+// support is the share of runs that could have printed this line and did. A
+// run ending before this point never had the chance: short, not different.
+func support(have int, at float64, scales []float64) float64 {
+	could := 0
+	for _, s := range scales {
+		if s+1e-9 >= at {
+			could++
+		}
+	}
+	if could < have {
+		could = have
+	}
+	return float64(have) / float64(could)
+}
+
+// renormalize turns the merged seconds back into fractions: weights that add
+// up across the model, and times as a share of the reference duration.
+func (m *Model) renormalize(norm float64) {
 	var total float64
 	for _, occs := range m.Expect {
 		for _, o := range occs {
 			total += float64(o.WeightFrac)
 		}
 	}
-	if total <= 0 {
-		return
-	}
 	for _, occs := range m.Expect {
 		for i := range occs {
-			occs[i].WeightFrac = float32(float64(occs[i].WeightFrac) / total)
+			if total > 0 {
+				occs[i].WeightFrac = float32(float64(occs[i].WeightFrac) / total)
+			}
+			occs[i].TimeFrac = float32(min(float64(occs[i].TimeFrac)/norm, 1))
 		}
 	}
 }

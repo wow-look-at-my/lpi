@@ -75,8 +75,15 @@ testdata/demo/         two complete fake cmake builds + a ~55% partial run,
   line (fraction of run duration). Progress = sum of matched weights, so
   silent stretches are owned by the line that ends them.
 - Models merge up to 8 runs: expected count per fingerprint is the upper
-  median across runs; occurrence fractions are averaged; weights
-  renormalized to 1.
+  median across runs; times and weights are averaged in SECONDS (each run's
+  fractions x its own duration) and renormalized, so a log cut short cannot
+  inflate its shares; each occurrence's weight is then scaled by the share of
+  runs that could have printed it and did, so one run's quirks do not hold
+  weight the next run can never claim.
+- Work the run is past and never did stops counting: the estimator tracks its
+  position on the reference (the earliest of its last N matches, N scaled to
+  the model) and retires unmatched expectations behind it, so a finished run
+  reads as finished instead of capping below 100%.
 - ETA scales the remaining reference time by the observed pace (elapsed vs
   matched reference time), shrunk toward the reference by the progress behind
   it: `PaceApplied = 1 + (Pace-1)*Progress`, so a local early pace cannot
