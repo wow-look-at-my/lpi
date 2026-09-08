@@ -221,7 +221,7 @@ func readFile(path string, format *timeparse.Format, fn func(*timeparse.Format, 
 		r = gz
 	}
 	sc := linescan.NewScanner(r)
-	var sample []string
+	det := timeparse.NewDetector(format)
 	if sc.Scan() {
 		if label, ok := parseCaptureHeader(sc.Text()); ok {
 			for sc.Scan() {
@@ -230,14 +230,10 @@ func readFile(path string, format *timeparse.Format, fn func(*timeparse.Format, 
 			}
 			return label, sc.Err()
 		}
-		sample = append(sample, sc.Text())
-		for len(sample) < timeparse.DetectLines && format == nil && sc.Scan() {
-			sample = append(sample, sc.Text())
+		for ready := det.Add(sc.Text()); !ready && sc.Scan(); ready = det.Add(sc.Text()) {
 		}
 	}
-	if format == nil {
-		format = timeparse.Detect(sample)
-	}
+	format, sample := det.Decide()
 	stamp := func(text string) time.Time {
 		if format == nil {
 			return time.Time{}

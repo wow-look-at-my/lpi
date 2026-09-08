@@ -5,6 +5,43 @@ import "time"
 // DetectLines is how many leading lines a reader samples to pick a format.
 const DetectLines = 300
 
+// Detector buffers the leading lines of a stream until it can pick a format.
+// A pinned format is ready immediately and buffers nothing.
+type Detector struct {
+	format *Format
+	pinned bool
+	sample []string
+}
+
+// NewDetector returns a Detector. A nil format means detect from the text.
+func NewDetector(format *Format) *Detector {
+	return &Detector{format: format, pinned: format != nil}
+}
+
+// Add buffers a line and reports whether the Detector can decide now.
+func (d *Detector) Add(line string) bool {
+	d.sample = append(d.sample, line)
+	return d.Ready()
+}
+
+// Ready reports whether Decide has all it wants: a pinned format, or a full sample.
+func (d *Detector) Ready() bool { return d.pinned || len(d.sample) >= DetectLines }
+
+// Buffered is how many lines are waiting on the decision.
+func (d *Detector) Buffered() int { return len(d.sample) }
+
+// Decide commits to a format and hands back the buffered lines, for the caller
+// to feed onward. A stream that goes quiet mid-sample may call it early.
+func (d *Detector) Decide() (*Format, []string) {
+	if !d.pinned {
+		d.format = Detect(d.sample)
+		d.pinned = true
+	}
+	sample := d.sample
+	d.sample = nil
+	return d.format, sample
+}
+
 // Stamper is the clock of a line stream: stamps read, carried over unstamped
 // lines, never backwards. Shared, so no path can disagree.
 type Stamper struct {

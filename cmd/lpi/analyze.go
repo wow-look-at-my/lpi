@@ -61,13 +61,11 @@ groups) instead of detecting it.`,
 // analyzeReader buffers the lines for timestamp
 func analyzeReader(r io.Reader, est *estimate.Estimator, format *estimate.TimeFormat) error {
 	sc := estimate.NewScanner(r)
-	var sample []string
-	for len(sample) < estimate.DetectLines && format == nil && sc.Scan() {
-		sample = append(sample, sc.Text())
+	det := estimate.NewDetector(format)
+	for !det.Ready() && sc.Scan() {
+		det.Add(sc.Text())
 	}
-	if format == nil {
-		format = estimate.DetectFormat(sample)
-	}
+	format, sample := det.Decide()
 	feeder := newLineFeeder(est, format, false)
 	for _, ln := range sample {
 		feeder.feed(ln)

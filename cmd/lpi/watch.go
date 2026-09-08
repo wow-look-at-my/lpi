@@ -62,7 +62,7 @@ Ctrl-C to get a final summary.`,
 			est:        estimate.NewEstimator(m),
 			r:          render.New(cmd.ErrOrStderr()),
 			jsonStream: watchOpts.jsonStream,
-			format:     format,
+			det:        estimate.NewDetector(format),
 		}
 		// NDJSON snapshots are coordinated like child
 		w.jsonW = w.r.Passthrough(cmd.OutOrStdout(), &w.mu)
@@ -85,9 +85,8 @@ type watcher struct {
 	r          *render.Renderer
 	jsonW      io.Writer
 	jsonStream bool
-	pending    []string // lines buffered until the time source is decided
-	// format pins the stamp reader; nil leaves the
-	format *estimate.TimeFormat
+	// det buffers the opening lines until the time source is decided
+	det *estimate.Detector
 }
 
 // loop consumes line batches and ticks until the
@@ -104,7 +103,7 @@ func (w *watcher) loop(lines <-chan string) {
 			w.update()
 		case <-ticker.C:
 			w.mu.Lock()
-			if w.feeder == nil && len(w.pending) > 0 {
+			if w.feeder == nil && w.det.Buffered() > 0 {
 				// The initial burst has settled: commit to a time
 				w.decideLocked()
 			}
@@ -137,9 +136,11 @@ func (w *watcher) handleBatch(batch []string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.feeder == nil {
-		w.pending = append(w.pending, batch...)
-		// A pinned format needs no sample, so the batch
-		if w.format != nil || len(w.pending) >= estimate.DetectLines {
+		ready := false
+		for _, ln := range batch {
+			ready = w.det.Add(ln)
+		}
+		if ready {
 			w.decideLocked()
 		}
 		return
@@ -149,17 +150,14 @@ func (w *watcher) handleBatch(batch []string) {
 	}
 }
 
-// decideLocked picks the time source from the
+// decideLocked commits to a time source and feeds it what the Detector held.
+// No format detected means the log carries no clock, so the wall clock runs.
 func (w *watcher) decideLocked() {
-	format := w.format
-	if format == nil {
-		format = estimate.DetectFormat(w.pending)
-	}
+	format, sample := w.det.Decide()
 	w.feeder = newLineFeeder(w.est, format, format == nil)
-	for _, ln := range w.pending {
+	for _, ln := range sample {
 		w.feeder.feed(ln)
 	}
-	w.pending = nil
 }
 
 // update repaints the status line and, when
@@ -176,7 +174,7 @@ func (w *watcher) update() {
 // finish flushes any undecided buffer and prints
 func (w *watcher) finish(cmd *cobra.Command) {
 	w.mu.Lock()
-	if w.feeder == nil && len(w.pending) > 0 {
+	if w.feeder == nil && w.det.Buffered() > 0 {
 		w.decideLocked()
 	}
 	final := w.est.Estimate()

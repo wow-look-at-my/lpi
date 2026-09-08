@@ -8,6 +8,12 @@ type TimeFormat = timeparse.Format
 // DetectLines is how many leading lines DetectFormat wants to see.
 const DetectLines = timeparse.DetectLines
 
+// Detector buffers the leading lines of a stream until it can pick a format.
+type Detector = timeparse.Detector
+
+// NewDetector returns a Detector, nil format to detect from the text itself.
+func NewDetector(format *TimeFormat) *Detector { return timeparse.NewDetector(format) }
+
 // Stamper is the clock of a line stream: stamps read, gaps carried, never backwards.
 type Stamper = timeparse.Stamper
 
