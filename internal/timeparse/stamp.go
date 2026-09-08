@@ -53,9 +53,6 @@ type Stamper struct {
 // NewStamper returns a Stamper reading stamps with format, nil to read none.
 func NewStamper(format *Format) *Stamper { return &Stamper{format: format} }
 
-// Format is the reader the Stamper parses with.
-func (s *Stamper) Format() *Format { return s.format }
-
 // Last is the effective time of the newest line, unset until a stamp is read.
 func (s *Stamper) Last() time.Time { return s.last }
 

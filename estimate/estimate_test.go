@@ -352,8 +352,6 @@ func TestStamperIsTheClockEveryPathShares(t *testing.T) {
 	format, err := estimate.CompileFormat("clock", "")
 	require.NoError(t, err)
 	s := estimate.NewStamper(format)
-	assert.Same(t, format, s.Format())
-
 	_, _, timed := s.Stamp("no stamp here")
 	assert.False(t, timed, "nothing has stamped the stream yet")
 
