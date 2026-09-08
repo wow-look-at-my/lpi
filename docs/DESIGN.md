@@ -166,7 +166,7 @@ Failed runs are deliberately NOT merged automatically. A truncated log corrupts 
 
 ### estimate
 
-The public library, `github.com/wow-look-at-my/lpi/estimate`. It is a facade over the internals. It is what a caller outside this repo imports. Its subject is a stream of tokens, not a log. `TokenOf` hashes an identifier as given, and `TokenOfLine` normalizes log text first. Everything below stays internal, so the CLI and the library can move independently. Full guide: [LIBRARY.md](LIBRARY.md).
+The public library, `github.com/wow-look-at-my/lpi/estimate`. Its subject is a stream of tokens, not a log. `TokenOf` hashes an identifier as given, and `TokenOfLine` normalizes log text first. `cmd/lpi` and `internal/eval` are built on it, so the estimation path a library caller gets is the one the CLI runs. What stays internal is what the CLI alone needs: rendering, tailing, line scanning, and the backtester. Full guide: [LIBRARY.md](LIBRARY.md).
 
 ```go
     type Token uint64
@@ -177,8 +177,11 @@ The public library, `github.com/wow-look-at-my/lpi/estimate`. It is a facade ove
     type Estimator struct{ ... }  // Observe/ObserveLine/Tick -> Estimate()
     type Matcher struct{ ... }    // many models: Locked, Best, MergeTarget
     type Store struct{ ... }      // Keys, Load, Save, Models, Remove
+    type Capture struct{ ... }    // Add/Close/Discard, and PendingDir
     type Run = model.Run
     type Estimate = progress.Snapshot
+    type TimeFormat = timeparse.Format // CompileFormat, DetectFormat
+    func RecordFile/RecordFileWith/RecordReader/ReplayFile
 ```
 
 The token seams the facade needs are `model.Digester.Token`, `progress.Estimator.ObserveToken` and `progress.Chooser.ObserveToken`. Each takes a hash the caller already holds. The line-taking methods normalize, then call the token method. So both paths share the whole algorithm.

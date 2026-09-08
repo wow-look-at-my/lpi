@@ -14,9 +14,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/wow-look-at-my/lpi/estimate"
 	"github.com/wow-look-at-my/lpi/internal/linescan"
-	"github.com/wow-look-at-my/lpi/internal/model"
-	"github.com/wow-look-at-my/lpi/internal/progress"
 	"github.com/wow-look-at-my/lpi/internal/render"
 )
 
@@ -66,7 +65,7 @@ yet) and the next invocation gets a real estimate. With a --ref, a missing
 			return errors.New("--learn requires --key (the model to save the run into)")
 		}
 		var (
-			m         *model.Model
+			m         *estimate.Model
 			bootstrap bool
 			err       error
 		)
@@ -84,10 +83,10 @@ yet) and the next invocation gets a real estimate. With a --ref, a missing
 			bootstrapNotice(errW, runOpts.rf.key)
 		}
 		r := render.New(errW)
-		lv := &liveRun{est: progress.NewEstimator(m), r: r, msg: renderNotify(r)}
+		lv := &liveRun{est: estimate.NewEstimator(m), r: r, msg: renderNotify(r)}
 		if learning {
 			source := sourceName("run", args)
-			lv.dig = model.NewDigester(source, nil)
+			lv.dig = estimate.NewRecorder(source)
 			lv.capture = newCapture(lv.msg, runOpts.rf.db, runOpts.rf.key, source)
 		}
 		exitCode, err := lv.execute(cmd, args)
@@ -100,7 +99,7 @@ yet) and the next invocation gets a real estimate. With a --ref, a missing
 			return err
 		}
 
-		final := lv.est.Snapshot()
+		final := lv.est.Estimate()
 		lv.r.Close(final)
 		fmt.Fprint(errW, render.Summary(final))
 		if lv.dig != nil {
@@ -139,17 +138,17 @@ func (lv *liveRun) finishLearn(errW io.Writer, exitCode int, args []string) erro
 
 // feeder is the estimator-shaped dependency of
 type feeder interface {
-	Observe(string, time.Time)
+	ObserveLine(string, time.Time)
 	Tick(time.Time)
-	Snapshot() progress.Snapshot
+	Estimate() estimate.Estimate
 }
 
 // liveRun is the shared live state of run invocation
 type liveRun struct {
 	mu      sync.Mutex
 	est     feeder
-	dig     *model.Digester
-	capture *model.CaptureWriter
+	dig     *estimate.Recorder
+	capture *estimate.Capture
 	r       *render.Renderer
 	msg     notify
 }
@@ -206,7 +205,7 @@ func (lv *liveRun) execute(cmd *cobra.Command, args []string) (int, error) {
 			case <-ticker.C:
 				lv.mu.Lock()
 				lv.est.Tick(time.Now())
-				lv.r.Update(lv.est.Snapshot())
+				lv.r.Update(lv.est.Estimate())
 				lv.mu.Unlock()
 			}
 		}
@@ -246,14 +245,14 @@ func (lv *liveRun) consume(pipe io.Reader, passthrough io.Writer) {
 	for sc.Scan() {
 		now := time.Now()
 		lv.mu.Lock()
-		lv.est.Observe(sc.Text(), now)
+		lv.est.ObserveLine(sc.Text(), now)
 		if lv.dig != nil {
-			lv.dig.LineAt(sc.Text(), now)
+			lv.dig.ObserveLine(sc.Text(), now)
 			if err := lv.capture.Add(sc.Text(), now); err != nil {
 				lv.msg("warning: capture file disabled: %v", err)
 			}
 		}
-		lv.r.Update(lv.est.Snapshot())
+		lv.r.Update(lv.est.Estimate())
 		lv.mu.Unlock()
 	}
 }

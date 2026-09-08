@@ -19,8 +19,10 @@ Autorelease publishes to the buildhost project `lpi` (`brew install pazer/build/
 
 ```
 estimate/              the public library, package estimate (doc.go, token.go,
-                       record.go, model.go, estimate.go, match.go, store.go).
-                       Nothing but the CLI and it import internal/ directly.
+                       record.go, format.go, capture.go, model.go, estimate.go,
+                       match.go, store.go). cmd/lpi and internal/eval are
+                       built on it: it is the estimation path, not a facade
+                       beside one.
 cmd/lpi/               cobra CLI: one command per file, self-registering via
                        init(); refs.go holds the shared --ref/--key/--db
                        resolution, the pinned JSON snapshot type, and the
@@ -79,6 +81,7 @@ testdata/demo/         two complete fake cmake builds + a ~55% partial run,
 ## Library API (estimate/)
 
 - `github.com/wow-look-at-my/lpi/estimate` is the importable surface. The repo root holds no Go files, so the module path itself is not a package.
+- The CLI consumes it. cmd/lpi imports internal/ only for render, tailer, linescan and eval, and internal/eval takes estimate's own types. So a library change that breaks the estimator breaks the CLI's tests, which is the point.
 - The public surface is tokens, not lines: `Token`/`TokenOf` hash an identifier as given, `TokenOfLine` normalizes log text first. `Recorder` -> `*Run` -> `Model` -> `Estimator`/`Matcher`, with `Store` over the CLI's own database. Depth: docs/LIBRARY.md.
 - The token seams into the internals are `model.Digester.Token`, `progress.Estimator.ObserveToken` and `progress.Chooser.ObserveToken`. The line methods normalize, then call them. `Chooser` normalizes once for every candidate.
 - `Run` and `Estimate` are aliases of `model.Run` and `progress.Snapshot`, so there is no second copy of either to keep in sync. `Model` wraps `*model.Model` for a smaller accessor surface.

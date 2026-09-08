@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/wow-look-at-my/lpi/internal/model"
+	"github.com/wow-look-at-my/lpi/estimate"
 	"github.com/wow-look-at-my/lpi/internal/render"
 )
 
@@ -24,7 +24,8 @@ var modelListCmd = &cobra.Command{
 	Short: "List all learned models",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		keys, err := model.Keys(modelDB)
+		store := estimate.OpenStore(modelDB)
+		keys, err := store.Keys()
 		if err != nil {
 			return err
 		}
@@ -35,8 +36,8 @@ var modelListCmd = &cobra.Command{
 		tw := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
 		fmt.Fprintln(tw, "KEY\tLABEL\tRUNS\tUNITS\tDURATION\tSIZE")
 		for _, key := range keys {
-			path := model.PathForKey(modelDB, key)
-			m, err := model.Load(path)
+			path := store.Path(key)
+			m, err := store.Load(key)
 			if err != nil {
 				return fmt.Errorf("load %s: %w", path, err)
 			}
@@ -45,11 +46,11 @@ var modelListCmd = &cobra.Command{
 				return err
 			}
 			dur := "-"
-			if m.HasTimes {
-				dur = render.Duration(m.RefDuration)
+			if m.HasTimes() {
+				dur = render.Duration(m.RefDuration())
 			}
 			fmt.Fprintf(tw, "%s\t%s\t%d\t%d\t%s\t%dB\n",
-				key, listLabel(m), len(m.Runs), m.TotalUnits, dur, st.Size())
+				key, listLabel(m), len(m.Runs()), m.Units(), dur, st.Size())
 		}
 		return tw.Flush()
 	},
@@ -59,11 +60,11 @@ var modelListCmd = &cobra.Command{
 const listLabelMax = 40
 
 // listLabel is the LABEL column value: the most
-func listLabel(m *model.Model) string {
-	if len(m.Invocations) == 0 {
+func listLabel(m *estimate.Model) string {
+	if len(m.Labels()) == 0 {
 		return "-"
 	}
-	label := m.DisplayLabel()
+	label := m.Label()
 	if len(label) > listLabelMax {
 		label = label[:listLabelMax] + "..."
 	}
@@ -75,8 +76,9 @@ var modelShowCmd = &cobra.Command{
 	Short: "Show a model's runs and merged totals",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		path := model.PathForKey(modelDB, args[0])
-		m, err := model.Load(path)
+		store := estimate.OpenStore(modelDB)
+		path := store.Path(args[0])
+		m, err := store.Load(args[0])
 		if err != nil {
 			if os.IsNotExist(err) {
 				return fmt.Errorf("no model for key %q in %s (%s)", args[0], modelDB, availableKeys(modelDB))
@@ -84,10 +86,10 @@ var modelShowCmd = &cobra.Command{
 			return err
 		}
 		out := cmd.OutOrStdout()
-		fmt.Fprintf(out, "key:  %s\nfile: %s\n\n", m.Key, path)
+		fmt.Fprintf(out, "key:  %s\nfile: %s\n\n", m.Key(), path)
 		tw := tabwriter.NewWriter(out, 2, 4, 2, ' ', 0)
 		fmt.Fprintln(tw, "SOURCE\tLINES\tDURATION\tTIMES")
-		for _, r := range m.Runs {
+		for _, r := range m.Runs() {
 			times := "no"
 			if r.HasTimes {
 				times = "yes"
@@ -97,7 +99,7 @@ var modelShowCmd = &cobra.Command{
 		if err := tw.Flush(); err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "\nmerged: %d runs, %d units%s\n", len(m.Runs), m.TotalUnits, modelDuration(m))
+		fmt.Fprintf(out, "\nmerged: %d runs, %d units%s\n", len(m.Runs()), m.Units(), modelDuration(m))
 		return nil
 	},
 }
@@ -107,8 +109,9 @@ var modelRmCmd = &cobra.Command{
 	Short: "Delete a model",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		path := model.PathForKey(modelDB, args[0])
-		if err := os.Remove(path); err != nil {
+		store := estimate.OpenStore(modelDB)
+		path := store.Path(args[0])
+		if err := store.Remove(args[0]); err != nil {
 			if os.IsNotExist(err) {
 				return fmt.Errorf("no model for key %q in %s (%s)", args[0], modelDB, availableKeys(modelDB))
 			}
@@ -120,7 +123,7 @@ var modelRmCmd = &cobra.Command{
 }
 
 func init() {
-	modelCmd.PersistentFlags().StringVar(&modelDB, "db", model.DefaultDir(),
+	modelCmd.PersistentFlags().StringVar(&modelDB, "db", estimate.DefaultDir(),
 		"model database directory")
 	modelCmd.AddCommand(modelListCmd, modelShowCmd, modelRmCmd)
 	rootCmd.AddCommand(modelCmd)

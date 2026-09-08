@@ -28,6 +28,10 @@ A token is any repeatable marker a task emits while it works. A test name, a mig
 | `Estimator` | scores a LIVE run against a `Model` and answers with an `Estimate` |
 | `Matcher` | scores a live run against MANY models, and locks onto the one it fits |
 | `Store` | a directory of models -- the same database the CLI reads and writes |
+| `Capture` | streams a learning run to a file, so a run that dies stays recoverable |
+| `TimeFormat` | reads a log line's stamp: `CompileFormat` pins one, `DetectFormat` guesses |
+
+The `lpi` command is built on this package rather than beside it. What the CLI keeps to itself is terminal rendering, file tailing, line scanning and the backtester.
 
 ## Record a run
 
@@ -105,7 +109,7 @@ if key, _, ok := mt.MergeTarget(); ok {
 
 ## Working with logs
 
-`RecordFile(path)` digests a complete log file. It detects the timestamps (ISO-8601, `HH:MM:SS`, syslog, go log, epoch, dmesg) and unpacks gzip. `RecordReader` does the same for a stream, without a clock. On the live side, `Estimator.ObserveLine` and `Matcher.ObserveLine` take raw log text.
+`RecordFile(path)` digests a complete log file. It detects the timestamps (ISO-8601, `HH:MM:SS`, syslog, go log, epoch, dmesg) and unpacks gzip. `RecordFileWith` pins the reader with a `CompileFormat` regex or layout, for stamps no builtin knows. `RecordReader` digests a stream, without a clock. `ReplayFile` feeds a finished log back through an `Estimator`, which is how backtesting works. On the live side, `Estimator.ObserveLine` and `Matcher.ObserveLine` take raw log text.
 
 These are all the same tokens underneath. A model learned from a log file estimates a stream of `TokenOfLine` tokens. The CLI's database and a library caller's database are one database.
 

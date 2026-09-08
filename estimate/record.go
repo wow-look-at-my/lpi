@@ -33,7 +33,18 @@ func (r *Recorder) Finish() (*Run, error) { return r.dig.Finish() }
 // RecordFile digests a complete log file into a Run, detecting its stamps and unpacking gzip.
 func RecordFile(path string) (*Run, error) { return model.DigestFile(path) }
 
-// RecordReader digests a log stream into a Run, a token per line. It carries
+// RecordFileWith digests a log file whose stamps are read with format, nil to detect.
+func RecordFileWith(path string, format *TimeFormat) (*Run, error) {
+	return model.DigestFileWith(path, format)
+}
+
+// ReplayFile hands every line of a log file to fn, stamped, so a finished run
+// scores the way it would have live.
+func ReplayFile(path string, format *TimeFormat, fn func(line string, at time.Time)) error {
+	return model.ReplayFile(path, format, fn)
+}
+
+// RecordReader digests a log stream into a Run, hashing each line. It carries
 // no clock, so the weights are positional.
 func RecordReader(r io.Reader, source string) (*Run, error) {
 	return model.DigestReader(r, source, nil)

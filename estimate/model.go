@@ -29,8 +29,11 @@ func (m *Model) Key() string { return m.m.Key }
 // Label is the model's display name: its newest label, else the key.
 func (m *Model) Label() string { return m.m.DisplayLabel() }
 
-// Runs is how many reference runs the model holds.
-func (m *Model) Runs() int { return len(m.m.Runs) }
+// Labels are the names AddLabel recorded, newest to oldest, and empty without any.
+func (m *Model) Labels() []string { return m.m.Invocations }
+
+// Runs are the reference runs the model holds, oldest to newest.
+func (m *Model) Runs() []*Run { return m.m.Runs }
 
 // Units is the token occurrences a full run is expected to emit: Estimate's denominator.
 func (m *Model) Units() int { return m.m.TotalUnits }

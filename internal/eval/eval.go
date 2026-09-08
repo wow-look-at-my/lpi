@@ -10,16 +10,13 @@ import (
 	"slices"
 	"time"
 
-	"github.com/wow-look-at-my/lpi/internal/fingerprint"
-	"github.com/wow-look-at-my/lpi/internal/model"
-	"github.com/wow-look-at-my/lpi/internal/progress"
-	"github.com/wow-look-at-my/lpi/internal/timeparse"
+	"github.com/wow-look-at-my/lpi/estimate"
 )
 
 // Target is a complete log: where to read it and its digest.
 type Target struct {
 	Path string
-	Run  *model.Run
+	Run  *estimate.Run
 }
 
 // Point is an estimate compared with the truth at that moment.
@@ -93,21 +90,21 @@ var checkpoints = []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1}
 // LeaveOneOut scores every target against a model built from the OTHER
 // targets, which is the only honest answer to "how good will it be on a run it
 // has not seen". A single target is scored against itself and marked SelfFit.
-func LeaveOneOut(targets []Target, format *timeparse.Format) ([]*Result, error) {
+func LeaveOneOut(targets []Target, format *estimate.TimeFormat) ([]*Result, error) {
 	if len(targets) == 0 {
 		return nil, errors.New("eval: no logs given")
 	}
 	results := make([]*Result, 0, len(targets))
 	for i, t := range targets {
-		m := model.New("eval")
+		m := estimate.NewModel("eval")
 		for j, other := range targets {
 			if j != i {
-				m.AddRun(other.Run)
+				m.Add(other.Run)
 			}
 		}
-		selfFit := len(m.Runs) == 0
+		selfFit := len(m.Runs()) == 0
 		if selfFit {
-			m.AddRun(t.Run)
+			m.Add(t.Run)
 		}
 		r, err := Score(m, t, format)
 		if err != nil {
@@ -121,7 +118,7 @@ func LeaveOneOut(targets []Target, format *timeparse.Format) ([]*Result, error) 
 
 // Against scores every target against a stored model, which is the real
 // holdout case: those logs were never merged into it.
-func Against(m *model.Model, targets []Target, format *timeparse.Format) ([]*Result, error) {
+func Against(m *estimate.Model, targets []Target, format *estimate.TimeFormat) ([]*Result, error) {
 	results := make([]*Result, 0, len(targets))
 	for _, t := range targets {
 		r, err := Score(m, t, format)
@@ -135,7 +132,7 @@ func Against(m *model.Model, targets []Target, format *timeparse.Format) ([]*Res
 
 // Score replays a complete log against m and measures every estimate it makes
 // along the way.
-func Score(m *model.Model, t Target, format *timeparse.Format) (*Result, error) {
+func Score(m *estimate.Model, t Target, format *estimate.TimeFormat) (*Result, error) {
 	if t.Run == nil {
 		return nil, fmt.Errorf("eval: %s: no digest", t.Path)
 	}
@@ -148,13 +145,13 @@ func Score(m *model.Model, t Target, format *timeparse.Format) (*Result, error) 
 			Lines:    t.Run.Lines,
 			Duration: t.Run.Duration,
 			HasTimes: t.Run.HasTimes,
-			RefRuns:  len(m.Runs),
+			RefRuns:  len(m.Runs()),
 		},
-		est:      progress.NewEstimator(m),
+		est:      estimate.NewEstimator(m),
 		run:      t.Run,
 		lastLine: t.Run.Lines - 1,
 	}
-	if err := model.ReplayFile(t.Path, format.Clone(), s.line); err != nil {
+	if err := estimate.ReplayFile(t.Path, format.Clone(), s.line); err != nil {
 		return nil, fmt.Errorf("eval: %s: %w", t.Path, err)
 	}
 	return s.finish(), nil
@@ -163,8 +160,8 @@ func Score(m *model.Model, t Target, format *timeparse.Format) (*Result, error) 
 // scorer replays a log and accumulates the error at every line.
 type scorer struct {
 	res      *Result
-	est      *progress.Estimator
-	run      *model.Run
+	est      *estimate.Estimator
+	run      *estimate.Run
 	lastLine int
 
 	idx      int
@@ -178,17 +175,17 @@ type scorer struct {
 	etaRun   float64
 	etaCount int
 	next     int
-	last     progress.Snapshot
+	last     estimate.Estimate
 }
 
 func (s *scorer) line(text string, at time.Time) {
 	// A line that normalizes to nothing never moved the digest clock, so the
 	// replay must not let it move ours.
-	if fingerprint.Normalize(text) == "" {
+	if estimate.Normalize(text) == "" {
 		return
 	}
-	s.est.Observe(text, s.clock(at))
-	snap := s.est.Snapshot()
+	s.est.ObserveLine(text, s.clock(at))
+	snap := s.est.Estimate()
 	p := Point{
 		Line:    s.idx,
 		Truth:   s.truth(),

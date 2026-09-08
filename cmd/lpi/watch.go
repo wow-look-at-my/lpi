@@ -12,10 +12,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/wow-look-at-my/lpi/internal/progress"
+	"github.com/wow-look-at-my/lpi/estimate"
 	"github.com/wow-look-at-my/lpi/internal/render"
 	"github.com/wow-look-at-my/lpi/internal/tailer"
-	"github.com/wow-look-at-my/lpi/internal/timeparse"
 )
 
 // newSignalContext is a seam so tests can
@@ -60,7 +59,7 @@ Ctrl-C to get a final summary.`,
 		go func() { tailErr <- tl.Run(ctx, lines) }()
 
 		w := &watcher{
-			est:        progress.NewEstimator(m),
+			est:        estimate.NewEstimator(m),
 			r:          render.New(cmd.ErrOrStderr()),
 			jsonStream: watchOpts.jsonStream,
 			format:     format,
@@ -81,14 +80,14 @@ Ctrl-C to get a final summary.`,
 // watcher holds the live state of watch invocation
 type watcher struct {
 	mu         sync.Mutex
-	est        *progress.Estimator
+	est        *estimate.Estimator
 	feeder     *lineFeeder
 	r          *render.Renderer
 	jsonW      io.Writer
 	jsonStream bool
 	pending    []string // lines buffered until the time source is decided
 	// format pins the stamp reader; nil leaves the
-	format *timeparse.Format
+	format *estimate.TimeFormat
 }
 
 // loop consumes line batches and ticks until the
@@ -154,7 +153,7 @@ func (w *watcher) handleBatch(batch []string) {
 func (w *watcher) decideLocked() {
 	format := w.format
 	if format == nil {
-		format = timeparse.Detect(w.pending)
+		format = estimate.DetectFormat(w.pending)
 	}
 	w.feeder = &lineFeeder{est: w.est, format: format, wall: format == nil}
 	for _, ln := range w.pending {
@@ -166,7 +165,7 @@ func (w *watcher) decideLocked() {
 // update repaints the status line and, when
 func (w *watcher) update() {
 	w.mu.Lock()
-	s := w.est.Snapshot()
+	s := w.est.Estimate()
 	w.mu.Unlock()
 	w.r.Update(s)
 	if w.jsonStream {
@@ -180,7 +179,7 @@ func (w *watcher) finish(cmd *cobra.Command) {
 	if w.feeder == nil && len(w.pending) > 0 {
 		w.decideLocked()
 	}
-	final := w.est.Snapshot()
+	final := w.est.Estimate()
 	w.mu.Unlock()
 	w.r.Close(final)
 	fmt.Fprint(cmd.ErrOrStderr(), render.Summary(final))

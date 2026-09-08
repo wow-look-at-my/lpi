@@ -11,9 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/wow-look-at-my/lpi/estimate"
 	"github.com/wow-look-at-my/lpi/internal/linescan"
-	"github.com/wow-look-at-my/lpi/internal/model"
-	"github.com/wow-look-at-my/lpi/internal/progress"
 	"github.com/wow-look-at-my/lpi/internal/render"
 )
 
@@ -54,7 +53,7 @@ from exit code 0.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var (
-			m         *model.Model
+			m         *estimate.Model
 			bootstrap bool
 			err       error
 		)
@@ -70,7 +69,7 @@ from exit code 0.`,
 		if bootstrap {
 			bootstrapNotice(errW, pipeOpts.learnKey)
 		}
-		est := progress.NewEstimator(m)
+		est := estimate.NewEstimator(m)
 		var r *render.Renderer
 		msg := plainNotify(errW)
 		if !pipeOpts.jsonStream {
@@ -78,11 +77,11 @@ from exit code 0.`,
 			msg = renderNotify(r)
 		}
 		st := &pipeLearnState{}
-		var dig *model.Digester
-		var capture *model.CaptureWriter
+		var dig *estimate.Recorder
+		var capture *estimate.Capture
 		if pipeOpts.learnKey != "" {
 			source := sourceName("pipe", nil)
-			dig = model.NewDigester(source, nil)
+			dig = estimate.NewRecorder(source)
 			capture = newCapture(msg, pipeOpts.rf.db, pipeOpts.learnKey, source)
 			stop := st.armInterrupt(msg, dig, capture, pipeOpts.rf.db, pipeOpts.learnKey)
 			defer stop()
@@ -102,14 +101,14 @@ from exit code 0.`,
 				st.mu.Unlock()
 				continue
 			}
-			est.Observe(sc.Text(), now)
+			est.ObserveLine(sc.Text(), now)
 			if dig != nil {
-				dig.LineAt(sc.Text(), now)
+				dig.ObserveLine(sc.Text(), now)
 				if err := capture.Add(sc.Text(), now); err != nil {
 					msg("warning: capture file disabled: %v", err)
 				}
 			}
-			s := est.Snapshot()
+			s := est.Estimate()
 			if r != nil {
 				r.Update(s)
 			} else {
@@ -138,7 +137,7 @@ from exit code 0.`,
 			return err
 		}
 
-		final := est.Snapshot()
+		final := est.Estimate()
 		if r != nil {
 			r.Close(final)
 		} else {
@@ -171,7 +170,7 @@ type pipeLearnState struct {
 }
 
 // armInterrupt installs the SIGINT/SIGTERM handler
-func (st *pipeLearnState) armInterrupt(msg notify, dig *model.Digester, capture *model.CaptureWriter, db, key string) (stop func()) {
+func (st *pipeLearnState) armInterrupt(msg notify, dig *estimate.Recorder, capture *estimate.Capture, db, key string) (stop func()) {
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, os.Interrupt, syscall.SIGTERM)
 	go func() {

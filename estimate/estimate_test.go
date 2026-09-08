@@ -3,6 +3,7 @@ package estimate_test
 import (
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -170,7 +171,7 @@ func TestModelMergesRunsAndKeepsALabel(t *testing.T) {
 	m := estimate.NewModel("merged")
 	m.Add(recordRun(t, "run1", toks))
 	m.Add(recordRun(t, "run2", toks))
-	assert.Equal(t, 2, m.Runs())
+	assert.Len(t, m.Runs(), 2)
 	assert.Equal(t, 30, m.Units(), "the same work seen twice is still 30 units")
 	assert.Equal(t, "merged", m.Label(), "no label recorded yet: the key stands in")
 	m.AddLabel("nightly import")
@@ -183,7 +184,7 @@ func TestModelEvictsBeyondMaxRuns(t *testing.T) {
 	for i := 0; i < estimate.MaxRuns+3; i++ {
 		m.Add(recordRun(t, fmt.Sprintf("run%d", i), toks))
 	}
-	assert.Equal(t, estimate.MaxRuns, m.Runs())
+	assert.Len(t, m.Runs(), estimate.MaxRuns)
 }
 
 func TestContentKeyFollowsTheTokens(t *testing.T) {
@@ -313,6 +314,70 @@ func TestLineAPIEstimatesALog(t *testing.T) {
 	byLine, err := rec.Finish()
 	require.NoError(t, err)
 	assert.Equal(t, 2, byLine.Lines)
+}
+
+func TestPinnedFormatReadsStampsNoDetectorKnows(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "odd.log")
+	body := "(01.03.2026 09h00m00s) start\n(01.03.2026 09h04m00s) middle\n" +
+		"(01.03.2026 09h10m00s) done\n"
+	require.NoError(t, os.WriteFile(log, []byte(body), 0o644))
+
+	format, err := estimate.CompileFormat(`^\((?P<time>[^)]+)\)`, "02.01.2006 15h04m05s")
+	require.NoError(t, err)
+	run, err := estimate.RecordFileWith(log, format)
+	require.NoError(t, err)
+	assert.True(t, run.HasTimes)
+	assert.Equal(t, 10*time.Minute, run.Duration)
+
+	// Nothing detects that shape, so the same log reads as untimed without it.
+	plain, err := estimate.RecordFile(log)
+	require.NoError(t, err)
+	assert.False(t, plain.HasTimes)
+	assert.Nil(t, estimate.DetectFormat([]string{"(01.03.2026 09h00m00s) start"}))
+	assert.NotEmpty(t, estimate.FormatNames())
+	assert.NotEmpty(t, estimate.FormatGroups())
+}
+
+func TestReplayFileScoresAFinishedLog(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "run.log")
+	body := "09:00:00 start\n09:02:00 middle\n09:05:00 done\n"
+	require.NoError(t, os.WriteFile(log, []byte(body), 0o644))
+	run, err := estimate.RecordFile(log)
+	require.NoError(t, err)
+
+	m := estimate.NewModel("replayed")
+	m.Add(run)
+	est := estimate.NewEstimator(m)
+	require.NoError(t, estimate.ReplayFile(log, nil, est.ObserveLine))
+	got := est.Estimate()
+	assert.Equal(t, 3, got.UnitsDone)
+	assert.InDelta(t, 1, got.Progress, 0.02, "replaying a log covers the run it came from")
+}
+
+func TestCaptureSurvivesARunThatNeverFinished(t *testing.T) {
+	dir := t.TempDir()
+	cap, err := estimate.NewCapture(dir, "job", "run under test")
+	require.NoError(t, err)
+	assert.Equal(t, estimate.PendingDir(dir), filepath.Dir(cap.Path()))
+	require.NoError(t, cap.Add("step one", base))
+	require.NoError(t, cap.Add("step two", base.Add(time.Minute)))
+	require.NoError(t, cap.Close())
+
+	// The kept file is what "lpi learn" ingests: the run, with its own times.
+	run, err := estimate.RecordFile(cap.Path())
+	require.NoError(t, err)
+	assert.Equal(t, 2, run.Lines)
+	assert.Equal(t, time.Minute, run.Duration)
+
+	cap.Discard()
+	_, err = os.Stat(cap.Path())
+	assert.ErrorIs(t, err, fs.ErrNotExist)
+
+	var absent *estimate.Capture
+	assert.NoError(t, absent.Add("dropped", base), "a capture that never opened swallows lines")
+	assert.NoError(t, absent.Close())
+	assert.Empty(t, absent.Path())
+	absent.Discard()
 }
 
 func TestRecordReaderDigestsAStream(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/wow-look-at-my/lpi/internal/model"
+	"github.com/wow-look-at-my/lpi/estimate"
 )
 
 // A synthetic corpus: shared core lines in order, plus lines peculiar to each
@@ -67,16 +67,16 @@ func writeRun(t *testing.T, dir string, spec runSpec) string {
 func corpusTarget(t *testing.T, dir string, spec runSpec) Target {
 	t.Helper()
 	path := writeRun(t, dir, spec)
-	run, err := model.DigestFileWith(path, nil)
+	run, err := estimate.RecordFileWith(path, nil)
 	require.NoError(t, err)
 	return Target{Path: path, Run: run}
 }
 
 // modelOf merges targets into a model, as `lpi learn` does.
-func modelOf(targets ...Target) *model.Model {
-	m := model.New("corpus")
+func modelOf(targets ...Target) *estimate.Model {
+	m := estimate.NewModel("corpus")
 	for _, t := range targets {
-		m.AddRun(t.Run)
+		m.Add(t.Run)
 	}
 	return m
 }

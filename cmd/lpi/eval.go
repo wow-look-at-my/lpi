@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/wow-look-at-my/lpi/estimate"
 	"github.com/wow-look-at-my/lpi/internal/eval"
-	"github.com/wow-look-at-my/lpi/internal/model"
 )
 
 var evalOpts struct {
@@ -47,7 +47,7 @@ nothing is written to the model database.`,
 		}
 		targets := make([]eval.Target, 0, len(args))
 		for _, path := range args {
-			run, err := model.DigestFileWith(path, format.Clone())
+			run, err := estimate.RecordFileWith(path, format.Clone())
 			if err != nil {
 				return fmt.Errorf("digest %s: %w", path, err)
 			}
@@ -56,7 +56,7 @@ nothing is written to the model database.`,
 
 		var results []*eval.Result
 		if evalOpts.rf.key != "" {
-			m, err := model.Load(model.PathForKey(evalOpts.rf.db, evalOpts.rf.key))
+			m, err := estimate.OpenStore(evalOpts.rf.db).Load(evalOpts.rf.key)
 			if err != nil {
 				return err
 			}
@@ -91,14 +91,15 @@ func learnTargets(w io.Writer, targets []eval.Target) error {
 		return err
 	}
 	for _, t := range targets {
-		m.AddRun(t.Run)
+		m.Add(t.Run)
 	}
-	dest := model.PathForKey(db, key)
-	if err := m.Save(dest); err != nil {
+	store := estimate.OpenStore(db)
+	dest := store.Path(key)
+	if err := store.Save(m); err != nil {
 		return err
 	}
 	fmt.Fprintf(w, "learned %d run(s) into %q: %d runs total -> %s\n",
-		len(targets), key, len(m.Runs), dest)
+		len(targets), key, len(m.Runs()), dest)
 	return nil
 }
 
