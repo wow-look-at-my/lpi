@@ -157,6 +157,28 @@ func learnRun(w io.Writer, db, key string, run *estimate.Run, invocation string)
 	return nil
 }
 
+// learnCapturedRun learns run under key and drops its capture. A save that
+// fails keeps the capture instead, with the command that recovers it.
+func learnCapturedRun(w io.Writer, msg notify, cw *estimate.Capture, db, key string, run *estimate.Run, invocation string) error {
+	if err := learnRun(w, db, key, run, invocation); err != nil {
+		keepCapture(msg, cw, db, key)
+		return err
+	}
+	cw.Discard()
+	return nil
+}
+
+// finishCapturedRun digests what was consumed. Too little to learn discards
+// the capture: there is nothing in it to recover.
+func finishCapturedRun(rec *estimate.Recorder, cw *estimate.Capture) (*estimate.Run, error) {
+	run, err := rec.Finish()
+	if err != nil {
+		cw.Discard()
+		return nil, fmt.Errorf("run not learned: %w", err)
+	}
+	return run, nil
+}
+
 // newCapture opens the durable capture file for a
 func newCapture(msg notify, db, key, source string) *estimate.Capture {
 	cw, err := estimate.NewCapture(db, key, source)

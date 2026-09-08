@@ -144,18 +144,11 @@ from exit code 0.`,
 		if dig == nil {
 			return nil
 		}
-		run, err := dig.Finish()
+		run, err := finishCapturedRun(dig, capture)
 		if err != nil {
-			// The only Finish failure is nonempty lines
-			capture.Discard()
-			return fmt.Errorf("run not learned: %w", err)
-		}
-		if err := learnRun(errW, pipeOpts.rf.db, pipeOpts.learnKey, run, ""); err != nil {
-			keepCapture(msg, capture, pipeOpts.rf.db, pipeOpts.learnKey)
 			return err
 		}
-		capture.Discard()
-		return nil
+		return learnCapturedRun(errW, msg, capture, pipeOpts.rf.db, pipeOpts.learnKey, run, "")
 	},
 }
 

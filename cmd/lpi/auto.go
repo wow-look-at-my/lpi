@@ -133,23 +133,13 @@ func finishAutoLearn(errW io.Writer, msg notify, db string, args []string, exitC
 	}
 	invocation := strings.Join(args, " ")
 	if key, _, ok := ch.MergeTarget(); ok {
-		if err := learnRun(errW, db, key, run, invocation); err != nil {
-			keepCapture(msg, capture, db, key)
-			return err
-		}
-		capture.Discard()
-		return nil
+		return learnCapturedRun(errW, msg, capture, db, key, run, invocation)
 	}
 	store := estimate.OpenStore(db)
 	id := estimate.ContentKey(run)
 	if _, err := os.Stat(store.Path(id)); err == nil {
 		// The id is a content hash: an existing file means
-		if err := learnRun(errW, db, id, run, invocation); err != nil {
-			keepCapture(msg, capture, db, id)
-			return err
-		}
-		capture.Discard()
-		return nil
+		return learnCapturedRun(errW, msg, capture, db, id, run, invocation)
 	}
 	m := estimate.NewModel(id)
 	m.AddLabel(invocation)

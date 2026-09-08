@@ -121,18 +121,11 @@ func (lv *liveRun) finishLearn(errW io.Writer, exitCode int, args []string) erro
 		keepOrDiscardCapture(lv.msg, lv.dig, lv.capture, db, key)
 		return nil
 	}
-	run, err := lv.dig.Finish()
+	run, err := finishCapturedRun(lv.dig, lv.capture)
 	if err != nil {
-		// The only Finish failure is nonempty lines
-		lv.capture.Discard()
-		return fmt.Errorf("run not learned: %w", err)
-	}
-	if err := learnRun(errW, db, key, run, strings.Join(args, " ")); err != nil {
-		keepCapture(lv.msg, lv.capture, db, key)
 		return err
 	}
-	lv.capture.Discard()
-	return nil
+	return learnCapturedRun(errW, lv.msg, lv.capture, db, key, run, strings.Join(args, " "))
 }
 
 // liveRun is the shared live state of run invocation
