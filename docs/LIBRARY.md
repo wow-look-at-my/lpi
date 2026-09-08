@@ -1,9 +1,13 @@
 # lpi as a Go library
 
-The command line wraps a general estimator. Give it a stream of semi-unique tokens and recordings of previous complete streams. It tells you how far along this stream is, and how long is left. Logs are the CLI's subject, not the estimator's. The root package `github.com/wow-look-at-my/lpi` is that estimator. The log-specific parts are optional.
+The command line wraps a general estimator. Give it a stream of semi-unique tokens and recordings of previous complete streams. It tells you how far along this stream is, and how long is left. Logs are the CLI's subject, not the estimator's. The package `github.com/wow-look-at-my/lpi/estimate` is that estimator. The log-specific parts are optional.
 
 ```sh
 go get github.com/wow-look-at-my/lpi
+```
+
+```go
+import "github.com/wow-look-at-my/lpi/estimate"
 ```
 
 ## What counts as a token
@@ -28,15 +32,15 @@ A token is any repeatable marker a task emits while it works. A test name, a mig
 ## Record a run
 
 ```go
-rec := lpi.NewRecorder("nightly-import")
+rec := estimate.NewRecorder("nightly-import")
 for ev := range events {
-	rec.Observe(lpi.TokenOf(ev.Step), ev.At)
+	rec.Observe(estimate.TokenOf(ev.Step), ev.At)
 }
 run, err := rec.Finish() // err under 2 tokens: a run of one token places nothing
 
-m := lpi.NewModel("nightly-import")
+m := estimate.NewModel("nightly-import")
 m.Add(run)
-lpi.OpenStore("").Save(m) // "" means the CLI's own database
+estimate.OpenStore("").Save(m) // "" means the CLI's own database
 ```
 
 `Model.Add` merges. Expected counts take the upper median across runs. Times and weights average in seconds, so a short or partial run cannot inflate its share. Beyond `MaxRuns` the oldest run is evicted. `AddLabel` records a human-facing name. `Label` reports it, and `lpi model list` shows it.
@@ -44,13 +48,13 @@ lpi.OpenStore("").Save(m) // "" means the CLI's own database
 ## Estimate a live run
 
 ```go
-m, err := lpi.OpenStore("").Load("nightly-import")
+m, err := estimate.OpenStore("").Load("nightly-import")
 if errors.Is(err, fs.ErrNotExist) {
 	// Never recorded. Record this run as the baseline instead of estimating it.
 }
-est := lpi.NewEstimator(m)
+est := estimate.NewEstimator(m)
 for ev := range events {
-	est.Observe(lpi.TokenOf(ev.Step), ev.At)
+	est.Observe(estimate.TokenOf(ev.Step), ev.At)
 	e := est.Estimate()
 	fmt.Printf("%.1f%% eta %s (%s)\n", e.Progress*100, e.ETA, e.Confidence)
 }
@@ -83,17 +87,17 @@ Never mix a recorded clock with wall-clock ticks in the same live run. The elaps
 Hand every stored model to a `Matcher` when the caller does not know which reference applies:
 
 ```go
-models, err := lpi.OpenStore("").Models()
-mt := lpi.NewMatcher(models...)
+models, err := estimate.OpenStore("").Models()
+mt := estimate.NewMatcher(models...)
 for ev := range events {
-	mt.Observe(lpi.TokenOf(ev.Step), ev.At)
+	mt.Observe(estimate.TokenOf(ev.Step), ev.At)
 }
 if key, _, ok := mt.MergeTarget(); ok {
 	// This run refines the pattern it was recognized as.
 } else {
 	// Nothing fit. File it under its own content, and the next run of this
 	// shape gets live progress.
-	key := lpi.ContentKey(run)
+	key := estimate.ContentKey(run)
 }
 ```
 

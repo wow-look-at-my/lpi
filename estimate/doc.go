@@ -1,4 +1,4 @@
-// Package lpi estimates completion, remaining work and ETA for anything that
+// Package estimate reports completion, remaining work and ETA for anything that
 // emits semi-unique tokens as it runs.
 //
 // A token is any repeatable marker a task emits while it works: a log line, a
@@ -11,11 +11,11 @@
 // Model, then feed a live run's tokens to an Estimator built from that Model
 // and read an Estimate whenever you want to draw something:
 //
-//	m := lpi.NewModel("nightly-import")
+//	m := estimate.NewModel("nightly-import")
 //	run, err := rec.Finish() // a Recorder fed with a completed run's tokens
 //	m.Add(run)
-//	est := lpi.NewEstimator(m)
-//	est.Observe(lpi.TokenOf(event.Name), event.At)
+//	est := estimate.NewEstimator(m)
+//	est.Observe(estimate.TokenOf(event.Name), event.At)
 //	e := est.Estimate() // e.Progress, e.ETA, e.Confidence
 //
 // Timestamps are optional. Pass an unset time.Time for a stream with no clock
@@ -25,13 +25,15 @@
 //
 // Use TokenOf for tokens that are already identifiers. Use TokenOfLine for raw
 // log text, which normalizes away timestamps, counters, hex ids, UUIDs and ANSI
-// before hashing, so lines that differ only in noise share one token.
+// before hashing, so lines that differ only in noise share a token.
 //
 // A Model is a small gzipped file. Store gives it the same on-disk database the
 // lpi command line uses, so a library caller and the CLI can share references.
-// Matcher identifies a live run against many models at once when the caller
-// does not know which reference applies.
+// Matcher identifies a live run against many models in parallel, for a caller
+// that does not know which reference applies.
 //
-// No type here is safe for concurrent use. One Estimator belongs to one live
-// run, and a caller feeding it from several goroutines owns the lock.
-package lpi
+// No type here is safe for concurrent use. An Estimator belongs to the live run
+// it scores, and a caller feeding it from several goroutines owns the lock.
+//
+// The guide, with worked examples, is docs/LIBRARY.md in this repository.
+package estimate

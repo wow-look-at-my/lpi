@@ -1,4 +1,4 @@
-package lpi_test
+package estimate_test
 
 import (
 	"fmt"
@@ -11,25 +11,25 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/wow-look-at-my/lpi"
+	"github.com/wow-look-at-my/lpi/estimate"
 )
 
 // base is the reference clock every synthetic run in this file starts at.
 var base = time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)
 
-// tokens builds a run of n tokens under prefix, one per second.
-func tokens(prefix string, n int) []lpi.Token {
-	toks := make([]lpi.Token, n)
+// tokens builds a run of n tokens under prefix, evenly spaced in time.
+func tokens(prefix string, n int) []estimate.Token {
+	toks := make([]estimate.Token, n)
 	for i := range toks {
-		toks[i] = lpi.TokenOf(fmt.Sprintf("%s-%04d", prefix, i))
+		toks[i] = estimate.TokenOf(fmt.Sprintf("%s-%04d", prefix, i))
 	}
 	return toks
 }
 
-// recordRun digests toks as a completed run, one token per second.
-func recordRun(t *testing.T, source string, toks []lpi.Token) *lpi.Run {
+// recordRun digests toks as a completed run, evenly spaced in time.
+func recordRun(t *testing.T, source string, toks []estimate.Token) *estimate.Run {
 	t.Helper()
-	rec := lpi.NewRecorder(source)
+	rec := estimate.NewRecorder(source)
 	for i, tok := range toks {
 		rec.Observe(tok, base.Add(time.Duration(i)*time.Second))
 	}
@@ -38,35 +38,35 @@ func recordRun(t *testing.T, source string, toks []lpi.Token) *lpi.Run {
 	return run
 }
 
-// modelOf builds a one-run model over toks.
-func modelOf(t *testing.T, key string, toks []lpi.Token) *lpi.Model {
+// modelOf builds a model of a lone run over toks.
+func modelOf(t *testing.T, key string, toks []estimate.Token) *estimate.Model {
 	t.Helper()
-	m := lpi.NewModel(key)
+	m := estimate.NewModel(key)
 	m.Add(recordRun(t, key+".run", toks))
 	return m
 }
 
 func TestTokenOfIsStableAndDistinct(t *testing.T) {
-	assert.Equal(t, lpi.TokenOf("compile widget.c"), lpi.TokenOf("compile widget.c"))
-	assert.NotEqual(t, lpi.TokenOf("compile widget.c"), lpi.TokenOf("compile gadget.c"))
+	assert.Equal(t, estimate.TokenOf("compile widget.c"), estimate.TokenOf("compile widget.c"))
+	assert.NotEqual(t, estimate.TokenOf("compile widget.c"), estimate.TokenOf("compile gadget.c"))
 	// TokenOf hashes what it is given: noise the caller leaves in is identity.
-	assert.NotEqual(t, lpi.TokenOf("step 1"), lpi.TokenOf("step 2"))
+	assert.NotEqual(t, estimate.TokenOf("step 1"), estimate.TokenOf("step 2"))
 }
 
 func TestTokenOfLineCollapsesNoise(t *testing.T) {
-	a, ok := lpi.TokenOfLine("10:04:07 [ 62%] Building C object src/net/tls.c.o")
+	a, ok := estimate.TokenOfLine("10:04:07 [ 62%] Building C object src/net/tls.c.o")
 	require.True(t, ok)
-	b, ok := lpi.TokenOfLine("09:31:02 [ 58%] Building C object src/net/tls.c.o")
+	b, ok := estimate.TokenOfLine("09:31:02 [ 58%] Building C object src/net/tls.c.o")
 	require.True(t, ok)
 	assert.Equal(t, a, b, "two runs of the same step share one token")
 
-	c, ok := lpi.TokenOfLine("Building C object src/net/http.c.o")
+	c, ok := estimate.TokenOfLine("Building C object src/net/http.c.o")
 	require.True(t, ok)
 	assert.NotEqual(t, a, c)
 
-	_, ok = lpi.TokenOfLine("   ")
+	_, ok = estimate.TokenOfLine("   ")
 	assert.False(t, ok, "a blank line carries nothing identifying")
-	assert.Contains(t, lpi.Normalize("build 1234 done"), "#")
+	assert.Contains(t, estimate.Normalize("build 1234 done"), "#")
 }
 
 func TestEstimatorTracksATimedRun(t *testing.T) {
@@ -76,7 +76,7 @@ func TestEstimatorTracksATimedRun(t *testing.T) {
 	require.True(t, m.HasTimes())
 	require.Equal(t, 59*time.Second, m.RefDuration())
 
-	est := lpi.NewEstimator(m)
+	est := estimate.NewEstimator(m)
 	for i, tok := range toks[:30] {
 		est.Observe(tok, base.Add(time.Duration(i)*time.Second))
 	}
@@ -99,7 +99,7 @@ func TestEstimatorTracksATimedRun(t *testing.T) {
 
 func TestEstimatorWithoutTimestamps(t *testing.T) {
 	toks := tokens("event", 40)
-	rec := lpi.NewRecorder("untimed")
+	rec := estimate.NewRecorder("untimed")
 	for _, tok := range toks {
 		rec.Observe(tok, time.Time{})
 	}
@@ -107,9 +107,9 @@ func TestEstimatorWithoutTimestamps(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, run.HasTimes, "no token carried a clock")
 
-	m := lpi.NewModel("untimed")
+	m := estimate.NewModel("untimed")
 	m.Add(run)
-	est := lpi.NewEstimator(m)
+	est := estimate.NewEstimator(m)
 	for _, tok := range toks[:20] {
 		est.Observe(tok, time.Time{})
 	}
@@ -122,7 +122,7 @@ func TestEstimatorWithoutTimestamps(t *testing.T) {
 func TestEstimatorTickSuppliesTheClock(t *testing.T) {
 	toks := tokens("step", 40)
 	m := modelOf(t, "ticked", toks)
-	est := lpi.NewEstimator(m)
+	est := estimate.NewEstimator(m)
 	// The live run's tokens carry no times of their own, so the caller ticks.
 	est.Observe(toks[0], base)
 	for _, tok := range toks[1:20] {
@@ -138,7 +138,7 @@ func TestEstimatorTickSuppliesTheClock(t *testing.T) {
 
 func TestNovelTokensLowerConfidence(t *testing.T) {
 	m := modelOf(t, "known", tokens("step", 40))
-	est := lpi.NewEstimator(m)
+	est := estimate.NewEstimator(m)
 	for i, tok := range tokens("other", 20) {
 		est.Observe(tok, base.Add(time.Duration(i)*time.Second))
 	}
@@ -149,9 +149,9 @@ func TestNovelTokensLowerConfidence(t *testing.T) {
 }
 
 func TestEmptyModelRecordsABaseline(t *testing.T) {
-	m := lpi.NewModel("first-ever")
-	est := lpi.NewEstimator(m)
-	est.Observe(lpi.TokenOf("anything"), base)
+	m := estimate.NewModel("first-ever")
+	est := estimate.NewEstimator(m)
+	est.Observe(estimate.TokenOf("anything"), base)
 	got := est.Estimate()
 	assert.Equal(t, "none", got.Confidence)
 	assert.Zero(t, got.UnitsTotal)
@@ -159,15 +159,15 @@ func TestEmptyModelRecordsABaseline(t *testing.T) {
 }
 
 func TestRecorderNeedsTwoTokens(t *testing.T) {
-	rec := lpi.NewRecorder("tiny")
-	rec.Observe(lpi.TokenOf("only"), base)
+	rec := estimate.NewRecorder("tiny")
+	rec.Observe(estimate.TokenOf("only"), base)
 	_, err := rec.Finish()
 	assert.Error(t, err, "one token places nothing")
 }
 
 func TestModelMergesRunsAndKeepsALabel(t *testing.T) {
 	toks := tokens("step", 30)
-	m := lpi.NewModel("merged")
+	m := estimate.NewModel("merged")
 	m.Add(recordRun(t, "run1", toks))
 	m.Add(recordRun(t, "run2", toks))
 	assert.Equal(t, 2, m.Runs())
@@ -179,23 +179,23 @@ func TestModelMergesRunsAndKeepsALabel(t *testing.T) {
 
 func TestModelEvictsBeyondMaxRuns(t *testing.T) {
 	toks := tokens("step", 10)
-	m := lpi.NewModel("capped")
-	for i := 0; i < lpi.MaxRuns+3; i++ {
+	m := estimate.NewModel("capped")
+	for i := 0; i < estimate.MaxRuns+3; i++ {
 		m.Add(recordRun(t, fmt.Sprintf("run%d", i), toks))
 	}
-	assert.Equal(t, lpi.MaxRuns, m.Runs())
+	assert.Equal(t, estimate.MaxRuns, m.Runs())
 }
 
 func TestContentKeyFollowsTheTokens(t *testing.T) {
 	toks := tokens("step", 20)
-	same := lpi.ContentKey(recordRun(t, "a", toks))
-	assert.Equal(t, same, lpi.ContentKey(recordRun(t, "b", toks)))
-	assert.NotEqual(t, same, lpi.ContentKey(recordRun(t, "c", tokens("other", 20))))
+	same := estimate.ContentKey(recordRun(t, "a", toks))
+	assert.Equal(t, same, estimate.ContentKey(recordRun(t, "b", toks)))
+	assert.NotEqual(t, same, estimate.ContentKey(recordRun(t, "c", tokens("other", 20))))
 	assert.True(t, strings.HasPrefix(same, "auto."), "content keys live in their own namespace")
 }
 
 func TestStoreRoundTrip(t *testing.T) {
-	store := lpi.OpenStore(t.TempDir())
+	store := estimate.OpenStore(t.TempDir())
 	m := modelOf(t, "job/one", tokens("step", 20))
 	m.AddLabel("make -j8")
 	require.NoError(t, store.Save(m))
@@ -221,7 +221,7 @@ func TestStoreRoundTrip(t *testing.T) {
 }
 
 func TestStoreOnAMissingDirectoryIsEmpty(t *testing.T) {
-	store := lpi.OpenStore(filepath.Join(t.TempDir(), "never-created"))
+	store := estimate.OpenStore(filepath.Join(t.TempDir(), "never-created"))
 	keys, err := store.Keys()
 	require.NoError(t, err)
 	assert.Empty(t, keys)
@@ -232,13 +232,13 @@ func TestStoreOnAMissingDirectoryIsEmpty(t *testing.T) {
 
 func TestOpenStoreDefaultsToTheCLIDatabase(t *testing.T) {
 	t.Setenv("LPI_DB", t.TempDir())
-	assert.Equal(t, lpi.DefaultDir(), lpi.OpenStore("").Dir())
+	assert.Equal(t, estimate.DefaultDir(), estimate.OpenStore("").Dir())
 }
 
 func TestMatcherLocksOntoTheRightModel(t *testing.T) {
 	build := tokens("build", 40)
 	deploy := tokens("deploy", 40)
-	mt := lpi.NewMatcher(modelOf(t, "build", build), modelOf(t, "deploy", deploy))
+	mt := estimate.NewMatcher(modelOf(t, "build", build), modelOf(t, "deploy", deploy))
 
 	_, _, ok := mt.Locked()
 	assert.False(t, ok, "nothing is identified before any token arrives")
@@ -267,15 +267,15 @@ func TestMatcherLocksOntoTheRightModel(t *testing.T) {
 }
 
 func TestMatcherReportsIdentifyingUntilItFits(t *testing.T) {
-	mt := lpi.NewMatcher(modelOf(t, "build", tokens("build", 40)))
-	mt.Observe(lpi.TokenOf("build-0000"), base)
+	mt := estimate.NewMatcher(modelOf(t, "build", tokens("build", 40)))
+	mt.Observe(estimate.TokenOf("build-0000"), base)
 	got := mt.Estimate()
 	assert.True(t, got.Identifying, "one token is not enough to identify a run")
 	assert.Zero(t, got.Progress)
 }
 
 func TestMatcherOnUnknownOutputNeverLocks(t *testing.T) {
-	mt := lpi.NewMatcher(modelOf(t, "build", tokens("build", 40)))
+	mt := estimate.NewMatcher(modelOf(t, "build", tokens("build", 40)))
 	for i, tok := range tokens("something-else", 40) {
 		mt.Observe(tok, base.Add(time.Duration(i)*time.Second))
 	}
@@ -286,9 +286,9 @@ func TestMatcherOnUnknownOutputNeverLocks(t *testing.T) {
 }
 
 func TestMatcherWithNoModelsJustCounts(t *testing.T) {
-	mt := lpi.NewMatcher()
-	mt.Observe(lpi.TokenOf("a"), base)
-	mt.Observe(lpi.TokenOf("b"), base.Add(time.Second))
+	mt := estimate.NewMatcher()
+	mt.Observe(estimate.TokenOf("a"), base)
+	mt.Observe(estimate.TokenOf("b"), base.Add(time.Second))
 	mt.Tick(base.Add(2 * time.Second))
 	got := mt.Estimate()
 	assert.False(t, got.Identifying, "with nothing to identify against there is nothing to wait for")
@@ -296,18 +296,18 @@ func TestMatcherWithNoModelsJustCounts(t *testing.T) {
 }
 
 func TestLineAPIEstimatesALog(t *testing.T) {
-	run, err := lpi.RecordFile(filepath.Join("testdata", "demo", "build1.log"))
+	run, err := estimate.RecordFile(filepath.Join("..", "testdata", "demo", "build1.log"))
 	require.NoError(t, err)
 	assert.Greater(t, run.Lines, 100)
 	assert.True(t, run.HasTimes)
 
-	m := lpi.NewModel("demo")
+	m := estimate.NewModel("demo")
 	m.Add(run)
-	est := lpi.NewEstimator(m)
+	est := estimate.NewEstimator(m)
 	est.ObserveLine("[  1%] Building C object src/core/alloc.c.o", base)
 	assert.Positive(t, est.Estimate().CurrentLines)
 
-	rec := lpi.NewRecorder("lines")
+	rec := estimate.NewRecorder("lines")
 	rec.ObserveLine("first step", base)
 	rec.ObserveLine("second step", base.Add(time.Second))
 	byLine, err := rec.Finish()
@@ -316,7 +316,7 @@ func TestLineAPIEstimatesALog(t *testing.T) {
 }
 
 func TestRecordReaderDigestsAStream(t *testing.T) {
-	run, err := lpi.RecordReader(strings.NewReader("alpha\nbeta\ngamma\n"), "stream")
+	run, err := estimate.RecordReader(strings.NewReader("alpha\nbeta\ngamma\n"), "stream")
 	require.NoError(t, err)
 	assert.Equal(t, 3, run.Lines)
 	assert.False(t, run.HasTimes, "a bare stream carries no clock")

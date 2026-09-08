@@ -198,17 +198,19 @@ That merges the run into the model with full timing data and removes the pending
 `lpi` is a CLI over a general estimator: anything that emits semi-unique tokens can have a bar and an ETA, not only logs. Steps, test names, migration ids, queue subjects -- record complete runs, then score a live one.
 
 ```go
-rec := lpi.NewRecorder("nightly-import")     // a run that finished
+import "github.com/wow-look-at-my/lpi/estimate"
+
+rec := estimate.NewRecorder("nightly-import")     // a run that finished
 for _, ev := range done {
-	rec.Observe(lpi.TokenOf(ev.Step), ev.At)
+	rec.Observe(estimate.TokenOf(ev.Step), ev.At)
 }
 run, _ := rec.Finish()
-m := lpi.NewModel("nightly-import")
+m := estimate.NewModel("nightly-import")
 m.Add(run)
 
-est := lpi.NewEstimator(m)                   // a run happening now
-est.Observe(lpi.TokenOf(ev.Step), ev.At)
-e := est.Estimate()                          // e.Progress, e.ETA, e.Confidence
+est := estimate.NewEstimator(m)                   // a run happening now
+est.Observe(estimate.TokenOf(ev.Step), ev.At)
+e := est.Estimate()                               // e.Progress, e.ETA, e.Confidence
 ```
 
 Timestamps are optional, and `ObserveLine` takes raw log text instead of tokens. `Matcher` identifies a run against every model you have. `Store` is the same database the CLI uses. Full guide: [docs/LIBRARY.md](docs/LIBRARY.md).

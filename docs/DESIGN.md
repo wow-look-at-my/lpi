@@ -164,9 +164,9 @@ Failed runs are deliberately NOT merged automatically. A truncated log corrupts 
 
 ## Package reference
 
-### lpi (root)
+### estimate
 
-The public library. It is a facade over the internals. It is what a caller outside this repo imports. Its subject is a stream of tokens, not a log. `TokenOf` hashes an identifier as given, and `TokenOfLine` normalizes log text first. Everything below stays internal, so the CLI and the library can move independently. Full guide: [LIBRARY.md](LIBRARY.md).
+The public library, `github.com/wow-look-at-my/lpi/estimate`. It is a facade over the internals. It is what a caller outside this repo imports. Its subject is a stream of tokens, not a log. `TokenOf` hashes an identifier as given, and `TokenOfLine` normalizes log text first. Everything below stays internal, so the CLI and the library can move independently. Full guide: [LIBRARY.md](LIBRARY.md).
 
 ```go
     type Token uint64
