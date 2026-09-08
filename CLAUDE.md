@@ -18,6 +18,9 @@ Autorelease publishes to the buildhost project `lpi` (`brew install pazer/build/
 ## Layout
 
 ```
+.                      package lpi: the public library (doc.go, token.go,
+                       record.go, model.go, estimate.go, match.go, store.go).
+                       Nothing but the CLI imports internal/ directly.
 cmd/lpi/               cobra CLI: one command per file, self-registering via
                        init(); refs.go holds the shared --ref/--key/--db
                        resolution, the pinned JSON snapshot type, and the
@@ -72,6 +75,13 @@ testdata/demo/         two complete fake cmake builds + a ~55% partial run,
 - Durable capture: every learning run/pipe streams consumed lines to <db>/pending/<key>-<stamp>-<pid>.log (format in docs/DESIGN.md). Learned -> file removed. Failed (non-zero exit, signal, read error, save error) -> file kept, and the exact "lpi learn --key K --db D <path>" recovery command printed. Under 2 nonempty lines -> nothing recoverable, removed. Capture-file problems only warn ("capture file disabled") and never fail the run. `lpi learn` finds capture files by their header, keeps their per-line timing, and removes ingested ones under the current db's pending/ dir after a successful save.
 - Live-learning bootstrap: a learn-target key with no model yet is NOT an error for `run --learn`/`pipe --learn-key`. That holds when no `--ref` is given and any `--key` equals the learn key. The run records a baseline against the empty model. It shows progress 0, confidence "none", and a "recording baseline" status line. pipe's `--learn-key` doubles as the reference key when `--key`/`--ref` are absent.
 - Magic default mode: `Execute` routes os.Args through `routeArgs`. A first arg that is no flag, no `--`, and no registered subcommand/alias (nor help/completion/__complete*) becomes `auto -- <args>`. `lpi -- CMD` is the escape for shadowed names. `auto` (only flag: --db) feeds every stored model to progress.Chooser. The Chooser locks by cumulative match rate and is always learning. Its thresholds are lockMinLines=12, earlyLockRate=0.8, lockWindowLines=32, lockRate=0.5, and switchMargin=0.15 hysteresis. Exit 0 merges into the locked pattern at final rate >= mergeRate=0.6, adding the command line to Model.Invocations (shown by `model list`'s LABEL column). Else it records a new pattern under model.AutoKey(run), `auto.<hash16>` in the reserved auto namespace, hashed from the fingerprint multiset. An existing file under that id means same content, so it merges. A clean run with under 2 nonempty lines learns nothing and is NOT an error. The capture is discarded, one "nothing to learn" notice line prints, and the exit code stays the child's 0. Failure semantics are unchanged from run --learn. Nothing is merged. The capture is kept under the fitted pattern's key when the fit was solid, else under the content id. Under 2 nonempty lines discards it. The exit code propagates.
+
+## Library API (root package)
+
+- The public surface is tokens, not lines: `Token`/`TokenOf` hash an identifier as given, `TokenOfLine` normalizes log text first. `Recorder` -> `*Run` -> `Model` -> `Estimator`/`Matcher`, with `Store` over the CLI's own database. Depth: docs/LIBRARY.md.
+- The token seams into the internals are `model.Digester.Token`, `progress.Estimator.ObserveToken` and `progress.Chooser.ObserveToken`. The line methods normalize, then call them. `Chooser` normalizes once for every candidate.
+- `Run` and `Estimate` are aliases of `model.Run` and `progress.Snapshot`, so there is no second copy of either to keep in sync. `Model` wraps `*model.Model` for a smaller accessor surface.
+- lpi_test.go is an EXTERNAL test package (`package lpi_test`), which is what proves the API works without internal access. example_test.go pins the numbers a doc example prints.
 
 ## Testing seams (package vars)
 

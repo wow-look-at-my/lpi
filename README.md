@@ -193,6 +193,26 @@ lpi learn --key mybuild --db ~/.cache/log-progress-indicator \
 
 That merges the run into the model with full timing data and removes the pending file. The next `lpi run --key mybuild` estimates against it. Failed runs are deliberately not merged automatically. A truncated log corrupts the model's time-gap weights, so the default is recoverability and the choice to merge stays yours (`--learn-on-failure` opts into merging). If lpi was killed outright and never printed the hint, look in `<db>/pending/`. Captures of successfully learned runs are always cleaned up, so anything left there is recoverable data.
 
+## Use it as a Go library
+
+`lpi` is a CLI over a general estimator: anything that emits semi-unique tokens can have a bar and an ETA, not only logs. Steps, test names, migration ids, queue subjects -- record complete runs, then score a live one.
+
+```go
+rec := lpi.NewRecorder("nightly-import")     // a run that finished
+for _, ev := range done {
+	rec.Observe(lpi.TokenOf(ev.Step), ev.At)
+}
+run, _ := rec.Finish()
+m := lpi.NewModel("nightly-import")
+m.Add(run)
+
+est := lpi.NewEstimator(m)                   // a run happening now
+est.Observe(lpi.TokenOf(ev.Step), ev.At)
+e := est.Estimate()                          // e.Progress, e.ETA, e.Confidence
+```
+
+Timestamps are optional, and `ObserveLine` takes raw log text instead of tokens. `Matcher` identifies a run against every model you have. `Store` is the same database the CLI uses. Full guide: [docs/LIBRARY.md](docs/LIBRARY.md).
+
 ## How it works
 
 1. **Fingerprinting.** Every line is normalized into a stable template -- ANSI escapes stripped, timestamps/counters/hex hashes/UUIDs collapsed to `#`, whitespace squashed -- and hashed (FNV-1a 64). `10:04:07 [ 62%] Building C object src/net/tls.c.o` and `09:31:02 [ 58%] Building C object src/net/tls.c.o` become the same fingerprint. Variable noise vanishes. Identifying text stays.

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -82,22 +83,16 @@ explicit form 'lpi -- CMD [ARGS...]'.`,
 
 // loadCandidates offers every stored model to the
 func loadCandidates(warnW io.Writer, db string) ([]progress.Candidate, error) {
-	entries, err := os.ReadDir(db)
-	if os.IsNotExist(err) {
-		return nil, nil
-	}
+	keys, err := model.Keys(db)
 	if err != nil {
 		return nil, err
 	}
 	var cands []progress.Candidate
-	for _, e := range entries {
-		name, ok := strings.CutSuffix(e.Name(), ".lpi")
-		if !ok || e.IsDir() {
-			continue
-		}
-		m, err := model.Load(model.PathForKey(db, name))
+	for _, name := range keys {
+		path := model.PathForKey(db, name)
+		m, err := model.Load(path)
 		if err != nil {
-			fmt.Fprintf(warnW, "warning: skipping model %s: %v\n", e.Name(), err)
+			fmt.Fprintf(warnW, "warning: skipping model %s: %v\n", filepath.Base(path), err)
 			continue
 		}
 		cands = append(cands, progress.Candidate{Key: name, Label: m.DisplayLabel(), Model: m})

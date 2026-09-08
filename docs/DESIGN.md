@@ -164,6 +164,25 @@ Failed runs are deliberately NOT merged automatically. A truncated log corrupts 
 
 ## Package reference
 
+### lpi (root)
+
+The public library. It is a facade over the internals. It is what a caller outside this repo imports. Its subject is a stream of tokens, not a log. `TokenOf` hashes an identifier as given, and `TokenOfLine` normalizes log text first. Everything below stays internal, so the CLI and the library can move independently. Full guide: [LIBRARY.md](LIBRARY.md).
+
+```go
+    type Token uint64
+    func TokenOf(s string) Token
+    func TokenOfLine(line string) (Token, bool)
+    type Recorder struct{ ... }   // Observe/ObserveLine -> Finish() (*Run, error)
+    type Model struct{ ... }      // Add(*Run), Save, Label, Units, RefDuration
+    type Estimator struct{ ... }  // Observe/ObserveLine/Tick -> Estimate()
+    type Matcher struct{ ... }    // many models: Locked, Best, MergeTarget
+    type Store struct{ ... }      // Keys, Load, Save, Models, Remove
+    type Run = model.Run
+    type Estimate = progress.Snapshot
+```
+
+The token seams the facade needs are `model.Digester.Token`, `progress.Estimator.ObserveToken` and `progress.Chooser.ObserveToken`. Each takes a hash the caller already holds. The line-taking methods normalize, then call the token method. So both paths share the whole algorithm.
+
 ### internal/fingerprint
 
 ```go
@@ -243,6 +262,7 @@ A regex naming none of the known groups is rejected, so a typo fails loudly inst
     func NewDigester(source string, format *timeparse.Format) *Digester
     func (d *Digester) Line(text string)
     func (d *Digester) LineAt(text string, at time.Time)
+    func (d *Digester) Token(fp uint64, at time.Time) // no normalization
     func (d *Digester) Finish() (*Run, error) // error if < 2 nonempty lines
     func DigestReader(r io.Reader, source string, format *timeparse.Format) (*Run, error)
     func DigestFile(path string) (*Run, error)
@@ -268,6 +288,7 @@ A regex naming none of the known groups is rejected, so a typo fails loudly inst
     func Load(path string) (*Model, error)
     func DefaultDir() string
     func PathForKey(dir, key string) string
+    func Keys(dir string) ([]string, error) // sorted; a missing dir has none
     func PendingDir(db string) string // <db>/pending, the capture-file dir
     type CaptureWriter struct{ ... }  // nil-safe methods; see "Capture durability"
     func NewCaptureWriter(db, key, source string) (*CaptureWriter, error)
@@ -306,6 +327,7 @@ Persistence: `Save` writes a gzip-compressed gob envelope `{Version: 1, Key, Run
     type Estimator struct{ ... }
     func NewEstimator(m *model.Model) *Estimator
     func (e *Estimator) Observe(line string, at time.Time) // at zero if unknown
+    func (e *Estimator) ObserveToken(fp uint64, at time.Time) // no normalization
     func (e *Estimator) Tick(at time.Time) // advance clock without a line
     func (e *Estimator) Snapshot() Snapshot
     type Snapshot struct {
@@ -335,6 +357,7 @@ Persistence: `Save` writes a gzip-compressed gob envelope `{Version: 1, Key, Run
     type Chooser struct{ ... } // see "Automatic mode"
     func NewChooser(cands []Candidate) *Chooser
     func (c *Chooser) Observe(line string, at time.Time)
+    func (c *Chooser) ObserveToken(fp uint64, at time.Time)
     func (c *Chooser) Tick(at time.Time)
     func (c *Chooser) Snapshot() Snapshot
     func (c *Chooser) Locked() (key, label string, ok bool)

@@ -78,7 +78,13 @@ func (d *Digester) add(text string, at time.Time) {
 	if norm == "" {
 		return
 	}
-	fp := fingerprint.Sum64(norm)
+	d.Token(fingerprint.Sum64(norm), at)
+}
+
+// Token feeds an already-hashed token, stamped with at. An unset at means the
+// token carries no time of its own. This is the seam the token API digests
+// through: a stream of opaque tokens never passes through line normalization.
+func (d *Digester) Token(fp uint64, at time.Time) {
 	ro := rawOcc{idx: d.count}
 	d.count++
 	switch {

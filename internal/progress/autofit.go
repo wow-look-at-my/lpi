@@ -3,6 +3,7 @@ package progress
 import (
 	"time"
 
+	"github.com/wow-look-at-my/lpi/internal/fingerprint"
 	"github.com/wow-look-at-my/lpi/internal/model"
 )
 
@@ -43,9 +44,19 @@ func NewChooser(cands []Candidate) *Chooser {
 
 // Observe feeds live line to every estimator, then
 func (c *Chooser) Observe(line string, at time.Time) {
-	c.null.Observe(line, at)
+	norm := fingerprint.Normalize(line)
+	if norm == "" {
+		return
+	}
+	c.ObserveToken(fingerprint.Sum64(norm), at)
+}
+
+// ObserveToken feeds an already-hashed token to every estimator, then
+// re-decides the lock.
+func (c *Chooser) ObserveToken(fp uint64, at time.Time) {
+	c.null.ObserveToken(fp, at)
 	for _, e := range c.ests {
-		e.Observe(line, at)
+		e.ObserveToken(fp, at)
 	}
 	c.decide()
 }

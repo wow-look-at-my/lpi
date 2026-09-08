@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
-	"strings"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
@@ -26,21 +24,14 @@ var modelListCmd = &cobra.Command{
 	Short: "List all learned models",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		entries, err := os.ReadDir(modelDB)
-		if err != nil && !os.IsNotExist(err) {
+		keys, err := model.Keys(modelDB)
+		if err != nil {
 			return err
-		}
-		var keys []string
-		for _, e := range entries {
-			if name, ok := strings.CutSuffix(e.Name(), ".lpi"); ok && !e.IsDir() {
-				keys = append(keys, name)
-			}
 		}
 		if len(keys) == 0 {
 			fmt.Fprintf(cmd.OutOrStdout(), "no models in %s\n", modelDB)
 			return nil
 		}
-		sort.Strings(keys)
 		tw := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
 		fmt.Fprintln(tw, "KEY\tLABEL\tRUNS\tUNITS\tDURATION\tSIZE")
 		for _, key := range keys {
