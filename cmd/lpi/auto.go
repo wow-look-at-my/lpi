@@ -52,11 +52,11 @@ explicit form 'lpi -- CMD [ARGS...]'.`,
 		if err != nil {
 			return err
 		}
-		ch := estimate.NewMatcher(models...)
+		ch := estimate.NewMatcher(estimate.TokenOfLine, models...)
 		r := render.New(errW)
 		lv := &liveRun{est: ch, r: r, msg: renderNotify(r)}
 		source := sourceName("auto", args)
-		lv.dig = estimate.NewRecorder(source)
+		lv.dig = estimate.NewRecorder(source, estimate.TokenOfLine)
 		lv.capture = newCapture(lv.msg, autoOpts.db, "auto", source)
 
 		exitCode, err := lv.execute(cmd, args)
@@ -100,7 +100,7 @@ func loadCandidates(warnW io.Writer, db string) ([]*estimate.Model, error) {
 }
 
 // autoRecoveryKey is the key a kept capture should
-func autoRecoveryKey(ch *estimate.Matcher, run *estimate.Run) string {
+func autoRecoveryKey(ch *estimate.Matcher[string], run *estimate.Run) string {
 	if key, _, ok := ch.MergeTarget(); ok {
 		return key
 	}
@@ -108,7 +108,7 @@ func autoRecoveryKey(ch *estimate.Matcher, run *estimate.Run) string {
 }
 
 // keepAutoCapture keeps the capture file with
-func keepAutoCapture(msg notify, ch *estimate.Matcher, dig *estimate.Recorder, capture *estimate.Capture, db string) {
+func keepAutoCapture(msg notify, ch *estimate.Matcher[string], dig *estimate.Recorder[string], capture *estimate.Capture, db string) {
 	run, err := dig.Finish()
 	if err != nil {
 		capture.Discard()
@@ -118,7 +118,7 @@ func keepAutoCapture(msg notify, ch *estimate.Matcher, dig *estimate.Recorder, c
 }
 
 // finishAutoLearn completes the always-learning
-func finishAutoLearn(errW io.Writer, msg notify, db string, args []string, exitCode int, ch *estimate.Matcher, dig *estimate.Recorder, capture *estimate.Capture) error {
+func finishAutoLearn(errW io.Writer, msg notify, db string, args []string, exitCode int, ch *estimate.Matcher[string], dig *estimate.Recorder[string], capture *estimate.Capture) error {
 	if exitCode != 0 {
 		fmt.Fprintf(errW, "exit status %d -- run not learned\n", exitCode)
 		keepAutoCapture(msg, ch, dig, capture, db)

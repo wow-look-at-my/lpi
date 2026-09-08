@@ -11,11 +11,12 @@
 // Model, then feed a live run's tokens to an Estimator built from that Model
 // and read an Estimate whenever you want to draw something:
 //
+//	type Step string // the caller's own type
 //	m := estimate.NewModel("nightly-import")
-//	run, err := rec.Finish() // a Recorder fed with a completed run's tokens
+//	run, err := rec.Finish() // a Recorder fed with a completed run's steps
 //	m.Add(run)
-//	est := estimate.NewEstimator(m)
-//	est.Observe(estimate.TokenOf(event.Name), event.At)
+//	est := estimate.NewEstimator(m, estimate.Identifiers[Step])
+//	est.Observe(event.Step, event.At)
 //	e := est.Estimate() // e.Progress, e.ETA, e.Confidence
 //
 // Timestamps are optional. Pass an unset time.Time for a stream with no clock
@@ -23,9 +24,12 @@
 // ETA. A live stream with no timestamps of its own can call Tick with the wall
 // clock to get an elapsed time and a paced ETA.
 //
-// Use TokenOf for tokens that are already identifiers. Use TokenOfLine for raw
-// log text, which normalizes away timestamps, counters, hex ids, UUIDs and ANSI
-// before hashing, so lines that differ only in noise share a token.
+// Recorder, Estimator and Matcher are generic over the caller's own value
+// type, and take a Tokenizer that reduces it to a Token. Identifiers is the
+// Tokenizer for a value that already identifies its work, over any
+// string-shaped type. TokenOfLine is the Tokenizer for raw log text: it
+// normalizes away timestamps, counters, hex ids, UUIDs and ANSI before hashing,
+// so lines that differ only in noise share a token.
 //
 // A Model is a small gzipped file. Store gives it the same on-disk database the
 // lpi command line uses, so a library caller and the CLI can share references.

@@ -163,7 +163,7 @@ func learnCapturedRun(w io.Writer, msg notify, cw *estimate.Capture, db, key str
 
 // finishCapturedRun digests what was consumed. Too little to learn discards
 // the capture: there is nothing in it to recover.
-func finishCapturedRun(rec *estimate.Recorder, cw *estimate.Capture) (*estimate.Run, error) {
+func finishCapturedRun(rec *estimate.Recorder[string], cw *estimate.Capture) (*estimate.Run, error) {
 	run, err := rec.Finish()
 	if err != nil {
 		cw.Discard()
@@ -193,7 +193,7 @@ func keepCapture(msg notify, cw *estimate.Capture, db, key string) {
 }
 
 // keepOrDiscardCapture keeps the capture file with
-func keepOrDiscardCapture(msg notify, rec *estimate.Recorder, cw *estimate.Capture, db, key string) {
+func keepOrDiscardCapture(msg notify, rec *estimate.Recorder[string], cw *estimate.Capture, db, key string) {
 	if _, err := rec.Finish(); err != nil {
 		cw.Discard()
 		return
@@ -261,7 +261,7 @@ func writeJSONSnapshot(w io.Writer, s estimate.Estimate) error {
 
 // lineFeeder stamps live lines with a time and
 type lineFeeder struct {
-	est   *estimate.Estimator
+	est   *estimate.Estimator[string]
 	stamp *estimate.Stamper
 	wall  bool
 }
@@ -269,7 +269,7 @@ type lineFeeder struct {
 // newLineFeeder reads the log's own clock through format. wall takes the time
 // from the machine instead, which only a live stream may do: a file on disk
 // was written when it was written.
-func newLineFeeder(est *estimate.Estimator, format *estimate.TimeFormat, wall bool) *lineFeeder {
+func newLineFeeder(est *estimate.Estimator[string], format *estimate.TimeFormat, wall bool) *lineFeeder {
 	return &lineFeeder{est: est, stamp: estimate.NewStamper(format), wall: wall}
 }
 
@@ -278,7 +278,7 @@ func (f *lineFeeder) feed(line string) {
 	if !f.wall {
 		at, _, _ = f.stamp.Stamp(line)
 	}
-	f.est.ObserveLine(line, at)
+	f.est.Observe(line, at)
 }
 
 // sourceName labels a live-learned run, e.g

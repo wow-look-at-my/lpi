@@ -166,20 +166,22 @@ Failed runs are deliberately NOT merged automatically. A truncated log corrupts 
 
 ### estimate
 
-The public library, `github.com/wow-look-at-my/lpi/estimate`. Its subject is a stream of tokens, not a log. `TokenOf` hashes an identifier as given, and `TokenOfLine` normalizes log text first. `cmd/lpi` and `internal/eval` are built on it, so the estimation path a library caller gets is the one the CLI runs. What stays internal is what the CLI alone needs: rendering, tailing, line scanning, and the backtester. Full guide: [LIBRARY.md](LIBRARY.md).
+The public library, `github.com/wow-look-at-my/lpi/estimate`. Its subject is a stream of tokens, not a log. It is generic over the caller's own value type. A `Tokenizer[T]` reduces that value to a `Token`: `Identifiers` for a value that is already an id, `TokenOfLine` for raw log text. `cmd/lpi` and `internal/eval` are built on it, so the estimation path a library caller gets is the one the CLI runs. What stays internal is what the CLI alone needs: rendering, tailing, line scanning, and the backtester. Full guide: [LIBRARY.md](LIBRARY.md).
 
 ```go
     type Token uint64
+    type Tokenizer[T any] func(T) (Token, bool)
+    func Identifiers[T ~string](v T) (Token, bool)  // a value that is an id
+    func TokenOfLine(line string) (Token, bool)     // raw log text
     func TokenOf(s string) Token
-    func TokenOfLine(line string) (Token, bool)
-    type Recorder struct{ ... }   // Observe/ObserveLine -> Finish() (*Run, error)
+    type Recorder[T any] struct{ ... }  // Observe(T, time) -> Finish()
     type Model struct{ ... }      // Add(*Run), Save, Label, Units, RefDuration
-    type Estimator struct{ ... }  // Observe/ObserveLine/Tick -> Estimate()
-    type Matcher struct{ ... }    // many models: Locked, Best, MergeTarget
-    type Store struct{ ... }      // Keys, Load, Save, Models, Remove
+    type Estimator[T any] struct{ ... } // Observe(T, time)/Tick -> Estimate()
+    type Matcher[T any] struct{ ... }   // many models: Locked, Best, MergeTarget
+    type Store struct{ ... }      // Keys, Load, LoadOrNew, Save, Models, Remove
     type Capture struct{ ... }    // Add/Close/Discard, and PendingDir
-    type Sink struct{ ... }       // Obs/Rec/Cap: ObserveLine feeds all three
-    type Observer interface{ ... }     // Estimator and Matcher both satisfy it
+    type Sink[T ~string] struct{ ... }  // Obs/Rec/Cap: Observe feeds all three
+    type Observer[T any] interface{ ... } // Estimator and Matcher satisfy it
     type Stamper = timeparse.Stamper   // NewStamper, DetectLines
     type Scanner = linescan.Scanner    // NewScanner
     type Run = model.Run

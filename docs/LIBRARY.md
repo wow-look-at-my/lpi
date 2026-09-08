@@ -17,20 +17,31 @@ A token is any repeatable marker a task emits while it works. A test name, a mig
 - **Semi-unique.** A run emits a varied vocabulary, not the same token again and again. A stream of one repeated token places nothing, and `Confidence` says so.
 - **Repeatable.** The next run emits approximately the same multiset. Order does not matter. Matching is order-free, so parallel and interleaved work is fine.
 
-`TokenOf(s)` hashes an identifier the caller already holds. Anything that varies between runs must be out of it already. If it is not, no run matches any other run. `TokenOfLine(s)` is the log path. It strips ANSI, collapses timestamps, counters, hex hashes and UUIDs, then hashes. So `10:04:07 [ 62%] Building tls.c.o` and `09:31:02 [ 58%] Building tls.c.o` are the same token. `Normalize` gives you the template it hashed, for tests and for logging.
+A `Tokenizer[T]` reduces the caller's own value to a `Token`. `Recorder[T]`, `Estimator[T]` and `Matcher[T]` take one, so the caller feeds its own type and never hashes anything:
+
+```go
+type Stage string
+est := estimate.NewEstimator(m, estimate.Identifiers[Stage])
+est.Observe(stage, at)
+```
+
+`Identifiers` is the Tokenizer for values that already identify their work, over any string-shaped type. Anything varying between runs must be out of the value already. If it is not, no run matches any other run.
+
+`TokenOfLine` is the Tokenizer for raw log text. It strips ANSI, collapses timestamps, counters, hex hashes and UUIDs, then hashes. So `10:04:07 [ 62%] Building tls.c.o` and `09:31:02 [ 58%] Building tls.c.o` are the same token. A Tokenizer of your own returns ok false for a value carrying nothing identifying, and the estimator drops it. `Normalize` gives you the template `TokenOfLine` hashed.
 
 ## The types
 
 | type | what it is |
 |---|---|
-| `Recorder` | digests one COMPLETED run into a `*Run` |
+| `Tokenizer[T]` | reduces the caller's own value to a `Token`: `Identifiers`, `TokenOfLine` |
+| `Recorder[T]` | digests one COMPLETED run into a `*Run` |
 | `Model` | the merged expectation, built from up to `MaxRuns` runs, saved as one small file |
-| `Estimator` | scores a LIVE run against a `Model` and answers with an `Estimate` |
-| `Matcher` | scores a live run against MANY models, and locks onto the one it fits |
+| `Estimator[T]` | scores a LIVE run against a `Model` and answers with an `Estimate` |
+| `Matcher[T]` | scores a live run against MANY models, and locks onto the one it fits |
 | `Store` | a directory of models -- the same database the CLI reads and writes |
 | `Capture` | streams a learning run to a file, so a run that dies stays recoverable |
-| `Sink` | feeds each line to the Observer, the Recorder and the Capture at once |
-| `Observer` | what a live run is fed to: `Estimator` and `Matcher` both satisfy it |
+| `Sink[T]` | feeds each value to the Observer, the Recorder and the Capture at once |
+| `Observer[T]` | what a live run is fed to: `Estimator` and `Matcher` both satisfy it |
 | `TimeFormat` | reads a log line's stamp: `CompileFormat` pins one, `DetectFormat` guesses |
 
 The `lpi` command is built on this package rather than beside it. What the CLI keeps to itself is terminal rendering, file tailing, line scanning and the backtester.
@@ -38,9 +49,9 @@ The `lpi` command is built on this package rather than beside it. What the CLI k
 ## Record a run
 
 ```go
-rec := estimate.NewRecorder("nightly-import")
+rec := estimate.NewRecorder("nightly-import", estimate.Identifiers[Step])
 for ev := range events {
-	rec.Observe(estimate.TokenOf(ev.Step), ev.At)
+	rec.Observe(ev.Step, ev.At)
 }
 run, err := rec.Finish() // err under 2 tokens: a run of one token places nothing
 
@@ -58,9 +69,9 @@ estimate.OpenStore("").Save(m) // "" means the CLI's own database
 // first run records its baseline instead of failing. Load reports fs.ErrNotExist.
 m, fresh, err := estimate.OpenStore("").LoadOrNew("nightly-import")
 _ = fresh // an empty model reads as confidence "none" until a run is added
-est := estimate.NewEstimator(m)
+est := estimate.NewEstimator(m, estimate.Identifiers[Step])
 for ev := range events {
-	est.Observe(estimate.TokenOf(ev.Step), ev.At)
+	est.Observe(ev.Step, ev.At)
 	e := est.Estimate()
 	fmt.Printf("%.1f%% eta %s (%s)\n", e.Progress*100, e.ETA, e.Confidence)
 }
@@ -94,9 +105,9 @@ Hand every stored model to a `Matcher` when the caller does not know which refer
 
 ```go
 models, err := estimate.OpenStore("").Models()
-mt := estimate.NewMatcher(models...)
+mt := estimate.NewMatcher(estimate.Identifiers[Step], models...)
 for ev := range events {
-	mt.Observe(estimate.TokenOf(ev.Step), ev.At)
+	mt.Observe(ev.Step, ev.At)
 }
 if key, _, ok := mt.MergeTarget(); ok {
 	// This run refines the pattern it was recognized as.
@@ -111,7 +122,7 @@ if key, _, ok := mt.MergeTarget(); ok {
 
 ## Working with logs
 
-`RecordFile(path)` digests a complete log file. It detects the timestamps (ISO-8601, `HH:MM:SS`, syslog, go log, epoch, dmesg) and unpacks gzip. `RecordFileWith` pins the reader with a `CompileFormat` regex or layout, for stamps no builtin knows. `RecordReader` digests a stream, without a clock. `ReplayFile` feeds a finished log back through an `Estimator`, which is how backtesting works. On the live side, `Estimator.ObserveLine` and `Matcher.ObserveLine` take raw log text.
+`RecordFile(path)` digests a complete log file. It detects the timestamps (ISO-8601, `HH:MM:SS`, syslog, go log, epoch, dmesg) and unpacks gzip. `RecordFileWith` pins the reader with a `CompileFormat` regex or layout, for stamps no builtin knows. `RecordReader` digests a stream, without a clock. `ReplayFile` feeds a finished log back through an `Estimator`, which is how backtesting works. On the live side, a log stream is an `Estimator[string]` built with `TokenOfLine`, and `Observe` takes the raw line.
 
 These are all the same tokens underneath. A model learned from a log file estimates a stream of `TokenOfLine` tokens. The CLI's database and a library caller's database are one database.
 

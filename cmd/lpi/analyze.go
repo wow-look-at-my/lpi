@@ -45,7 +45,7 @@ groups) instead of detecting it.`,
 		if err != nil {
 			return err
 		}
-		est := estimate.NewEstimator(m)
+		est := estimate.NewEstimator(m, estimate.TokenOfLine)
 		if err := analyzeReader(r, est, format); err != nil {
 			return err
 		}
@@ -59,7 +59,7 @@ groups) instead of detecting it.`,
 }
 
 // analyzeReader buffers the lines for timestamp
-func analyzeReader(r io.Reader, est *estimate.Estimator, format *estimate.TimeFormat) error {
+func analyzeReader(r io.Reader, est *estimate.Estimator[string], format *estimate.TimeFormat) error {
 	sc := estimate.NewScanner(r)
 	det := estimate.NewDetector(format)
 	for !det.Ready() && sc.Scan() {

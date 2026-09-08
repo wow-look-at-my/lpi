@@ -68,7 +68,7 @@ from exit code 0.`,
 		if bootstrap {
 			bootstrapNotice(errW, pipeOpts.learnKey)
 		}
-		est := estimate.NewEstimator(m)
+		est := estimate.NewEstimator(m, estimate.TokenOfLine)
 		var r *render.Renderer
 		msg := plainNotify(errW)
 		if !pipeOpts.jsonStream {
@@ -76,17 +76,17 @@ from exit code 0.`,
 			msg = renderNotify(r)
 		}
 		st := &pipeLearnState{}
-		var dig *estimate.Recorder
+		var dig *estimate.Recorder[string]
 		var capture *estimate.Capture
 		if pipeOpts.learnKey != "" {
 			source := sourceName("pipe", nil)
-			dig = estimate.NewRecorder(source)
+			dig = estimate.NewRecorder(source, estimate.TokenOfLine)
 			capture = newCapture(msg, pipeOpts.rf.db, pipeOpts.learnKey, source)
 			stop := st.armInterrupt(msg, dig, capture, pipeOpts.rf.db, pipeOpts.learnKey)
 			defer stop()
 		}
 
-		sink := &estimate.Sink{Obs: est, Rec: dig, Cap: capture}
+		sink := &estimate.Sink[string]{Obs: est, Rec: dig, Cap: capture}
 
 		// The tee sits at the reader: every byte the line
 		out := cmd.OutOrStdout()
@@ -102,7 +102,7 @@ from exit code 0.`,
 				st.mu.Unlock()
 				continue
 			}
-			if err := sink.ObserveLine(sc.Text(), now); err != nil {
+			if err := sink.Observe(sc.Text(), now); err != nil {
 				msg("warning: capture file disabled: %v", err)
 			}
 			s := est.Estimate()
@@ -160,7 +160,7 @@ type pipeLearnState struct {
 }
 
 // armInterrupt installs the SIGINT/SIGTERM handler
-func (st *pipeLearnState) armInterrupt(msg notify, dig *estimate.Recorder, capture *estimate.Capture, db, key string) (stop func()) {
+func (st *pipeLearnState) armInterrupt(msg notify, dig *estimate.Recorder[string], capture *estimate.Capture, db, key string) (stop func()) {
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, os.Interrupt, syscall.SIGTERM)
 	go func() {

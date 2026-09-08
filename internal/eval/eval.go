@@ -147,7 +147,7 @@ func Score(m *estimate.Model, t Target, format *estimate.TimeFormat) (*Result, e
 			HasTimes: t.Run.HasTimes,
 			RefRuns:  len(m.Runs()),
 		},
-		est:      estimate.NewEstimator(m),
+		est:      estimate.NewEstimator(m, estimate.TokenOfLine),
 		stamp:    estimate.NewStamper(nil),
 		run:      t.Run,
 		lastLine: t.Run.Lines - 1,
@@ -161,7 +161,7 @@ func Score(m *estimate.Model, t Target, format *estimate.TimeFormat) (*Result, e
 // scorer replays a log and accumulates the error at every line.
 type scorer struct {
 	res      *Result
-	est      *estimate.Estimator
+	est      *estimate.Estimator[string]
 	run      *estimate.Run
 	lastLine int
 
@@ -185,7 +185,7 @@ func (s *scorer) line(text string, at time.Time) {
 	if estimate.Normalize(text) == "" {
 		return
 	}
-	s.est.ObserveLine(text, s.clock(at))
+	s.est.Observe(text, s.clock(at))
 	snap := s.est.Estimate()
 	p := Point{
 		Line:    s.idx,

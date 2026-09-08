@@ -82,10 +82,10 @@ yet) and the next invocation gets a real estimate. With a --ref, a missing
 			bootstrapNotice(errW, runOpts.rf.key)
 		}
 		r := render.New(errW)
-		lv := &liveRun{est: estimate.NewEstimator(m), r: r, msg: renderNotify(r)}
+		lv := &liveRun{est: estimate.NewEstimator(m, estimate.TokenOfLine), r: r, msg: renderNotify(r)}
 		if learning {
 			source := sourceName("run", args)
-			lv.dig = estimate.NewRecorder(source)
+			lv.dig = estimate.NewRecorder(source, estimate.TokenOfLine)
 			lv.capture = newCapture(lv.msg, runOpts.rf.db, runOpts.rf.key, source)
 		}
 		exitCode, err := lv.execute(cmd, args)
@@ -131,8 +131,8 @@ func (lv *liveRun) finishLearn(errW io.Writer, exitCode int, args []string) erro
 // liveRun is the shared live state of run invocation
 type liveRun struct {
 	mu      sync.Mutex
-	est     estimate.Observer
-	dig     *estimate.Recorder
+	est     estimate.Observer[string]
+	dig     *estimate.Recorder[string]
 	capture *estimate.Capture
 	r       *render.Renderer
 	msg     notify
@@ -140,8 +140,8 @@ type liveRun struct {
 
 // sink is what every consumed line goes to: the estimate, the digest being
 // learned, and the capture file behind it.
-func (lv *liveRun) sink() *estimate.Sink {
-	return &estimate.Sink{Obs: lv.est, Rec: lv.dig, Cap: lv.capture}
+func (lv *liveRun) sink() *estimate.Sink[string] {
+	return &estimate.Sink[string]{Obs: lv.est, Rec: lv.dig, Cap: lv.capture}
 }
 
 // execute spawns the child and pumps its output
@@ -236,7 +236,7 @@ func (lv *liveRun) consume(pipe io.Reader, passthrough io.Writer) {
 	sink := lv.sink()
 	for sc.Scan() {
 		lv.mu.Lock()
-		if err := sink.ObserveLine(sc.Text(), time.Now()); err != nil {
+		if err := sink.Observe(sc.Text(), time.Now()); err != nil {
 			lv.msg("warning: capture file disabled: %v", err)
 		}
 		lv.r.Update(lv.est.Estimate())

@@ -18,5 +18,11 @@ func TokenOfLine(line string) (tok Token, ok bool) {
 	return Token(fingerprint.Sum64(norm)), true
 }
 
+// Tokenizer reduces a caller's value to a Token, ok false when it is empty.
+type Tokenizer[T any] func(T) (tok Token, ok bool)
+
+// Identifiers is the Tokenizer for values that are already ids.
+func Identifiers[T ~string](v T) (Token, bool) { return TokenOf(string(v)), true }
+
 // Normalize returns the template TokenOfLine hashes, for logging and tests.
 func Normalize(line string) string { return fingerprint.Normalize(line) }

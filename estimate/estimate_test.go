@@ -18,32 +18,38 @@ import (
 // base is the reference clock every synthetic run in this file starts at.
 var base = time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)
 
-// tokens builds a run of n tokens under prefix, evenly spaced in time.
-func tokens(prefix string, n int) []estimate.Token {
-	toks := make([]estimate.Token, n)
-	for i := range toks {
-		toks[i] = estimate.TokenOf(fmt.Sprintf("%s-%04d", prefix, i))
+// Step is a caller's own token type, which is what the generic API is for.
+type Step string
+
+// byStep is the Tokenizer these tests estimate and record through.
+var byStep = estimate.Identifiers[Step]
+
+// steps builds a run of n steps under prefix, evenly spaced in time.
+func steps(prefix string, n int) []Step {
+	out := make([]Step, n)
+	for i := range out {
+		out[i] = Step(fmt.Sprintf("%s-%04d", prefix, i))
 	}
-	return toks
+	return out
 }
 
-// recordRun digests toks as a completed run, evenly spaced in time.
-func recordRun(t *testing.T, source string, toks []estimate.Token) *estimate.Run {
+// recordRun digests run as a completed run, evenly spaced in time.
+func recordRun(t *testing.T, source string, run []Step) *estimate.Run {
 	t.Helper()
-	rec := estimate.NewRecorder(source)
-	for i, tok := range toks {
-		rec.Observe(tok, base.Add(time.Duration(i)*time.Second))
+	rec := estimate.NewRecorder(source, byStep)
+	for i, step := range run {
+		rec.Observe(step, base.Add(time.Duration(i)*time.Second))
 	}
-	run, err := rec.Finish()
+	done, err := rec.Finish()
 	require.NoError(t, err)
-	return run
+	return done
 }
 
-// modelOf builds a model of a lone run over toks.
-func modelOf(t *testing.T, key string, toks []estimate.Token) *estimate.Model {
+// modelOf builds a model of a lone run over the steps.
+func modelOf(t *testing.T, key string, run []Step) *estimate.Model {
 	t.Helper()
 	m := estimate.NewModel(key)
-	m.Add(recordRun(t, key+".run", toks))
+	m.Add(recordRun(t, key+".run", run))
 	return m
 }
 
@@ -71,26 +77,26 @@ func TestTokenOfLineCollapsesNoise(t *testing.T) {
 }
 
 func TestEstimatorTracksATimedRun(t *testing.T) {
-	toks := tokens("step", 60)
-	m := modelOf(t, "job", toks)
+	run := steps("step", 60)
+	m := modelOf(t, "job", run)
 	require.Equal(t, 60, m.Units())
 	require.True(t, m.HasTimes())
 	require.Equal(t, 59*time.Second, m.RefDuration())
 
-	est := estimate.NewEstimator(m)
-	for i, tok := range toks[:30] {
-		est.Observe(tok, base.Add(time.Duration(i)*time.Second))
+	est := estimate.NewEstimator(m, byStep)
+	for i, step := range run[:30] {
+		est.Observe(step, base.Add(time.Duration(i)*time.Second))
 	}
 	mid := est.Estimate()
-	assert.InDelta(t, 0.5, mid.Progress, 0.06, "half the tokens is about half the run")
+	assert.InDelta(t, 0.5, mid.Progress, 0.06, "half the steps is about half the run")
 	assert.Equal(t, 30, mid.UnitsDone)
 	assert.Equal(t, 60, mid.UnitsTotal)
 	assert.Equal(t, "high", mid.Confidence)
 	assert.Equal(t, "pace", mid.ETAKind)
 	assert.InDelta(t, 30*time.Second, mid.ETA, float64(6*time.Second))
 
-	for i, tok := range toks[30:] {
-		est.Observe(tok, base.Add(time.Duration(30+i)*time.Second))
+	for i, step := range run[30:] {
+		est.Observe(step, base.Add(time.Duration(30+i)*time.Second))
 	}
 	done := est.Estimate()
 	assert.InDelta(t, 1, done.Progress, 0.02)
@@ -99,20 +105,20 @@ func TestEstimatorTracksATimedRun(t *testing.T) {
 }
 
 func TestEstimatorWithoutTimestamps(t *testing.T) {
-	toks := tokens("event", 40)
-	rec := estimate.NewRecorder("untimed")
-	for _, tok := range toks {
-		rec.Observe(tok, time.Time{})
+	events := steps("event", 40)
+	rec := estimate.NewRecorder("untimed", byStep)
+	for _, ev := range events {
+		rec.Observe(ev, time.Time{})
 	}
 	run, err := rec.Finish()
 	require.NoError(t, err)
-	assert.False(t, run.HasTimes, "no token carried a clock")
+	assert.False(t, run.HasTimes, "nothing carried a clock")
 
 	m := estimate.NewModel("untimed")
 	m.Add(run)
-	est := estimate.NewEstimator(m)
-	for _, tok := range toks[:20] {
-		est.Observe(tok, time.Time{})
+	est := estimate.NewEstimator(m, byStep)
+	for _, ev := range events[:20] {
+		est.Observe(ev, time.Time{})
 	}
 	got := est.Estimate()
 	assert.InDelta(t, 0.5, got.Progress, 0.05, "tokens weigh equally without a clock")
@@ -121,13 +127,13 @@ func TestEstimatorWithoutTimestamps(t *testing.T) {
 }
 
 func TestEstimatorTickSuppliesTheClock(t *testing.T) {
-	toks := tokens("step", 40)
-	m := modelOf(t, "ticked", toks)
-	est := estimate.NewEstimator(m)
-	// The live run's tokens carry no times of their own, so the caller ticks.
-	est.Observe(toks[0], base)
-	for _, tok := range toks[1:20] {
-		est.Observe(tok, time.Time{})
+	run := steps("step", 40)
+	m := modelOf(t, "ticked", run)
+	est := estimate.NewEstimator(m, byStep)
+	// The live run's steps carry no times of their own, so the caller ticks.
+	est.Observe(run[0], base)
+	for _, step := range run[1:20] {
+		est.Observe(step, time.Time{})
 	}
 	est.Tick(base.Add(30 * time.Second))
 	got := est.Estimate()
@@ -138,10 +144,10 @@ func TestEstimatorTickSuppliesTheClock(t *testing.T) {
 }
 
 func TestNovelTokensLowerConfidence(t *testing.T) {
-	m := modelOf(t, "known", tokens("step", 40))
-	est := estimate.NewEstimator(m)
-	for i, tok := range tokens("other", 20) {
-		est.Observe(tok, base.Add(time.Duration(i)*time.Second))
+	m := modelOf(t, "known", steps("step", 40))
+	est := estimate.NewEstimator(m, byStep)
+	for i, step := range steps("other", 20) {
+		est.Observe(step, base.Add(time.Duration(i)*time.Second))
 	}
 	got := est.Estimate()
 	assert.Equal(t, "low", got.Confidence)
@@ -151,8 +157,8 @@ func TestNovelTokensLowerConfidence(t *testing.T) {
 
 func TestEmptyModelRecordsABaseline(t *testing.T) {
 	m := estimate.NewModel("first-ever")
-	est := estimate.NewEstimator(m)
-	est.Observe(estimate.TokenOf("anything"), base)
+	est := estimate.NewEstimator(m, byStep)
+	est.Observe(Step("anything"), base)
 	got := est.Estimate()
 	assert.Equal(t, "none", got.Confidence)
 	assert.Zero(t, got.UnitsTotal)
@@ -160,17 +166,17 @@ func TestEmptyModelRecordsABaseline(t *testing.T) {
 }
 
 func TestRecorderNeedsTwoTokens(t *testing.T) {
-	rec := estimate.NewRecorder("tiny")
-	rec.Observe(estimate.TokenOf("only"), base)
+	rec := estimate.NewRecorder("tiny", byStep)
+	rec.Observe(Step("only"), base)
 	_, err := rec.Finish()
-	assert.Error(t, err, "one token places nothing")
+	assert.Error(t, err, "a lone token places nothing")
 }
 
 func TestModelMergesRunsAndKeepsALabel(t *testing.T) {
-	toks := tokens("step", 30)
+	run := steps("step", 30)
 	m := estimate.NewModel("merged")
-	m.Add(recordRun(t, "run1", toks))
-	m.Add(recordRun(t, "run2", toks))
+	m.Add(recordRun(t, "run1", run))
+	m.Add(recordRun(t, "run2", run))
 	assert.Len(t, m.Runs(), 2)
 	assert.Equal(t, 30, m.Units(), "the same work seen twice is still 30 units")
 	assert.Equal(t, "merged", m.Label(), "no label recorded yet: the key stands in")
@@ -179,25 +185,25 @@ func TestModelMergesRunsAndKeepsALabel(t *testing.T) {
 }
 
 func TestModelEvictsBeyondMaxRuns(t *testing.T) {
-	toks := tokens("step", 10)
+	run := steps("step", 10)
 	m := estimate.NewModel("capped")
 	for i := 0; i < estimate.MaxRuns+3; i++ {
-		m.Add(recordRun(t, fmt.Sprintf("run%d", i), toks))
+		m.Add(recordRun(t, fmt.Sprintf("run%d", i), run))
 	}
 	assert.Len(t, m.Runs(), estimate.MaxRuns)
 }
 
 func TestContentKeyFollowsTheTokens(t *testing.T) {
-	toks := tokens("step", 20)
-	same := estimate.ContentKey(recordRun(t, "a", toks))
-	assert.Equal(t, same, estimate.ContentKey(recordRun(t, "b", toks)))
-	assert.NotEqual(t, same, estimate.ContentKey(recordRun(t, "c", tokens("other", 20))))
+	run := steps("step", 20)
+	same := estimate.ContentKey(recordRun(t, "a", run))
+	assert.Equal(t, same, estimate.ContentKey(recordRun(t, "b", run)))
+	assert.NotEqual(t, same, estimate.ContentKey(recordRun(t, "c", steps("other", 20))))
 	assert.True(t, strings.HasPrefix(same, "auto."), "content keys live in their own namespace")
 }
 
 func TestStoreRoundTrip(t *testing.T) {
 	store := estimate.OpenStore(t.TempDir())
-	m := modelOf(t, "job/one", tokens("step", 20))
+	m := modelOf(t, "job/one", steps("step", 20))
 	m.AddLabel("make -j8")
 	require.NoError(t, store.Save(m))
 
@@ -247,15 +253,15 @@ func TestOpenStoreDefaultsToTheCLIDatabase(t *testing.T) {
 }
 
 func TestMatcherLocksOntoTheRightModel(t *testing.T) {
-	build := tokens("build", 40)
-	deploy := tokens("deploy", 40)
-	mt := estimate.NewMatcher(modelOf(t, "build", build), modelOf(t, "deploy", deploy))
+	build := steps("build", 40)
+	deploy := steps("deploy", 40)
+	mt := estimate.NewMatcher(byStep, modelOf(t, "build", build), modelOf(t, "deploy", deploy))
 
 	_, _, ok := mt.Locked()
 	assert.False(t, ok, "nothing is identified before any token arrives")
 
-	for i, tok := range deploy {
-		mt.Observe(tok, base.Add(time.Duration(i)*time.Second))
+	for i, step := range deploy {
+		mt.Observe(step, base.Add(time.Duration(i)*time.Second))
 	}
 	key, label, ok := mt.Locked()
 	require.True(t, ok)
@@ -278,17 +284,17 @@ func TestMatcherLocksOntoTheRightModel(t *testing.T) {
 }
 
 func TestMatcherReportsIdentifyingUntilItFits(t *testing.T) {
-	mt := estimate.NewMatcher(modelOf(t, "build", tokens("build", 40)))
-	mt.Observe(estimate.TokenOf("build-0000"), base)
+	mt := estimate.NewMatcher(byStep, modelOf(t, "build", steps("build", 40)))
+	mt.Observe(Step("build-0000"), base)
 	got := mt.Estimate()
-	assert.True(t, got.Identifying, "one token is not enough to identify a run")
+	assert.True(t, got.Identifying, "a lone token cannot identify a run")
 	assert.Zero(t, got.Progress)
 }
 
 func TestMatcherOnUnknownOutputNeverLocks(t *testing.T) {
-	mt := estimate.NewMatcher(modelOf(t, "build", tokens("build", 40)))
-	for i, tok := range tokens("something-else", 40) {
-		mt.Observe(tok, base.Add(time.Duration(i)*time.Second))
+	mt := estimate.NewMatcher(byStep, modelOf(t, "build", steps("build", 40)))
+	for i, step := range steps("something-else", 40) {
+		mt.Observe(step, base.Add(time.Duration(i)*time.Second))
 	}
 	_, _, ok := mt.Locked()
 	assert.False(t, ok)
@@ -297,9 +303,9 @@ func TestMatcherOnUnknownOutputNeverLocks(t *testing.T) {
 }
 
 func TestMatcherWithNoModelsJustCounts(t *testing.T) {
-	mt := estimate.NewMatcher()
-	mt.Observe(estimate.TokenOf("a"), base)
-	mt.Observe(estimate.TokenOf("b"), base.Add(time.Second))
+	mt := estimate.NewMatcher(byStep)
+	mt.Observe(Step("a"), base)
+	mt.Observe(Step("b"), base.Add(time.Second))
 	mt.Tick(base.Add(2 * time.Second))
 	got := mt.Estimate()
 	assert.False(t, got.Identifying, "with nothing to identify against there is nothing to wait for")
@@ -314,13 +320,14 @@ func TestLineAPIEstimatesALog(t *testing.T) {
 
 	m := estimate.NewModel("demo")
 	m.Add(run)
-	est := estimate.NewEstimator(m)
-	est.ObserveLine("[  1%] Building C object src/core/alloc.c.o", base)
+	// A log is just a token stream whose Tokenizer is TokenOfLine.
+	est := estimate.NewEstimator(m, estimate.TokenOfLine)
+	est.Observe("[  1%] Building C object src/core/alloc.c.o", base)
 	assert.Positive(t, est.Estimate().CurrentLines)
 
-	rec := estimate.NewRecorder("lines")
-	rec.ObserveLine("first step", base)
-	rec.ObserveLine("second step", base.Add(time.Second))
+	rec := estimate.NewRecorder("lines", estimate.TokenOfLine)
+	rec.Observe("first step", base)
+	rec.Observe("second step", base.Add(time.Second))
 	byLine, err := rec.Finish()
 	require.NoError(t, err)
 	assert.Equal(t, 2, byLine.Lines)
@@ -382,8 +389,8 @@ func TestReplayFileScoresAFinishedLog(t *testing.T) {
 
 	m := estimate.NewModel("replayed")
 	m.Add(run)
-	est := estimate.NewEstimator(m)
-	require.NoError(t, estimate.ReplayFile(log, nil, est.ObserveLine))
+	est := estimate.NewEstimator(m, estimate.TokenOfLine)
+	require.NoError(t, estimate.ReplayFile(log, nil, est.Observe))
 	got := est.Estimate()
 	assert.Equal(t, 3, got.UnitsDone)
 	assert.InDelta(t, 1, got.Progress, 0.02, "replaying a log covers the run it came from")

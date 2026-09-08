@@ -59,7 +59,7 @@ Ctrl-C to get a final summary.`,
 		go func() { tailErr <- tl.Run(ctx, lines) }()
 
 		w := &watcher{
-			est:        estimate.NewEstimator(m),
+			est:        estimate.NewEstimator(m, estimate.TokenOfLine),
 			r:          render.New(cmd.ErrOrStderr()),
 			jsonStream: watchOpts.jsonStream,
 			det:        estimate.NewDetector(format),
@@ -80,7 +80,7 @@ Ctrl-C to get a final summary.`,
 // watcher holds the live state of watch invocation
 type watcher struct {
 	mu         sync.Mutex
-	est        *estimate.Estimator
+	est        *estimate.Estimator[string]
 	feeder     *lineFeeder
 	r          *render.Renderer
 	jsonW      io.Writer

@@ -200,20 +200,22 @@ That merges the run into the model with full timing data and removes the pending
 ```go
 import "github.com/wow-look-at-my/lpi/estimate"
 
-rec := estimate.NewRecorder("nightly-import")     // a run that finished
-for _, ev := range done {
-	rec.Observe(estimate.TokenOf(ev.Step), ev.At)
+type Step string                                  // your own token type
+
+rec := estimate.NewRecorder("nightly-import", estimate.Identifiers[Step])
+for _, ev := range done {                         // a run that finished
+	rec.Observe(ev.Step, ev.At)
 }
 run, _ := rec.Finish()
 m := estimate.NewModel("nightly-import")
 m.Add(run)
 
-est := estimate.NewEstimator(m)                   // a run happening now
-est.Observe(estimate.TokenOf(ev.Step), ev.At)
+est := estimate.NewEstimator(m, estimate.Identifiers[Step])
+est.Observe(ev.Step, ev.At)                       // a run happening now
 e := est.Estimate()                               // e.Progress, e.ETA, e.Confidence
 ```
 
-Timestamps are optional, and `ObserveLine` takes raw log text instead of tokens. `Matcher` identifies a run against every model you have. `Store` is the same database the CLI uses. Full guide: [docs/LIBRARY.md](docs/LIBRARY.md).
+Timestamps are optional, and `estimate.TokenOfLine` is the tokenizer for raw log text. `Matcher` identifies a run against every model you have. `Store` is the same database the CLI uses. Full guide: [docs/LIBRARY.md](docs/LIBRARY.md).
 
 ## How it works
 
