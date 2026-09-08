@@ -135,21 +135,20 @@ func (lv *liveRun) finishLearn(errW io.Writer, exitCode int, args []string) erro
 	return nil
 }
 
-// feeder is the estimator-shaped dependency of
-type feeder interface {
-	ObserveLine(string, time.Time)
-	Tick(time.Time)
-	Estimate() estimate.Estimate
-}
-
 // liveRun is the shared live state of run invocation
 type liveRun struct {
 	mu      sync.Mutex
-	est     feeder
+	est     estimate.Observer
 	dig     *estimate.Recorder
 	capture *estimate.Capture
 	r       *render.Renderer
 	msg     notify
+}
+
+// sink is what every consumed line goes to: the estimate, the digest being
+// learned, and the capture file behind it.
+func (lv *liveRun) sink() *estimate.Sink {
+	return &estimate.Sink{Obs: lv.est, Rec: lv.dig, Cap: lv.capture}
 }
 
 // execute spawns the child and pumps its output
@@ -241,15 +240,11 @@ func childExitCode(ee *exec.ExitError) int {
 // consume forwards child stream byte-faithfully
 func (lv *liveRun) consume(pipe io.Reader, passthrough io.Writer) {
 	sc := estimate.NewScanner(io.TeeReader(pipe, passthrough))
+	sink := lv.sink()
 	for sc.Scan() {
-		now := time.Now()
 		lv.mu.Lock()
-		lv.est.ObserveLine(sc.Text(), now)
-		if lv.dig != nil {
-			lv.dig.ObserveLine(sc.Text(), now)
-			if err := lv.capture.Add(sc.Text(), now); err != nil {
-				lv.msg("warning: capture file disabled: %v", err)
-			}
+		if err := sink.ObserveLine(sc.Text(), time.Now()); err != nil {
+			lv.msg("warning: capture file disabled: %v", err)
 		}
 		lv.r.Update(lv.est.Estimate())
 		lv.mu.Unlock()

@@ -86,6 +86,8 @@ from exit code 0.`,
 			defer stop()
 		}
 
+		sink := &estimate.Sink{Obs: est, Rec: dig, Cap: capture}
+
 		// The tee sits at the reader: every byte the line
 		out := cmd.OutOrStdout()
 		if r != nil {
@@ -100,12 +102,8 @@ from exit code 0.`,
 				st.mu.Unlock()
 				continue
 			}
-			est.ObserveLine(sc.Text(), now)
-			if dig != nil {
-				dig.ObserveLine(sc.Text(), now)
-				if err := capture.Add(sc.Text(), now); err != nil {
-					msg("warning: capture file disabled: %v", err)
-				}
+			if err := sink.ObserveLine(sc.Text(), now); err != nil {
+				msg("warning: capture file disabled: %v", err)
 			}
 			s := est.Estimate()
 			if r != nil {

@@ -178,6 +178,8 @@ The public library, `github.com/wow-look-at-my/lpi/estimate`. Its subject is a s
     type Matcher struct{ ... }    // many models: Locked, Best, MergeTarget
     type Store struct{ ... }      // Keys, Load, Save, Models, Remove
     type Capture struct{ ... }    // Add/Close/Discard, and PendingDir
+    type Sink struct{ ... }       // Obs/Rec/Cap: ObserveLine feeds all three
+    type Observer interface{ ... }     // Estimator and Matcher both satisfy it
     type Stamper = timeparse.Stamper   // NewStamper, DetectLines
     type Scanner = linescan.Scanner    // NewScanner
     type Run = model.Run

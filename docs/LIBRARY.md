@@ -29,6 +29,8 @@ A token is any repeatable marker a task emits while it works. A test name, a mig
 | `Matcher` | scores a live run against MANY models, and locks onto the one it fits |
 | `Store` | a directory of models -- the same database the CLI reads and writes |
 | `Capture` | streams a learning run to a file, so a run that dies stays recoverable |
+| `Sink` | feeds each line to the Observer, the Recorder and the Capture at once |
+| `Observer` | what a live run is fed to: `Estimator` and `Matcher` both satisfy it |
 | `TimeFormat` | reads a log line's stamp: `CompileFormat` pins one, `DetectFormat` guesses |
 
 The `lpi` command is built on this package rather than beside it. What the CLI keeps to itself is terminal rendering, file tailing, line scanning and the backtester.
