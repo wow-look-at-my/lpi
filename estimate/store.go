@@ -1,6 +1,8 @@
 package estimate
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 
 	"github.com/wow-look-at-my/lpi/internal/model"
@@ -34,6 +36,16 @@ func (s *Store) Keys() ([]string, error) { return model.Keys(s.dir) }
 
 // Load reads the model under key, answering fs.ErrNotExist for a key never learned.
 func (s *Store) Load(key string) (*Model, error) { return LoadModel(s.Path(key)) }
+
+// LoadOrNew reads the model under key, or hands back an empty model for it
+// with fresh true: how a run under an unlearned key records its baseline.
+func (s *Store) LoadOrNew(key string) (m *Model, fresh bool, err error) {
+	m, err = s.Load(key)
+	if errors.Is(err, fs.ErrNotExist) {
+		return NewModel(key), true, nil
+	}
+	return m, false, err
+}
 
 // Save writes m under its own key, creating the directory if needed.
 func (s *Store) Save(m *Model) error { return m.Save(s.Path(m.Key())) }

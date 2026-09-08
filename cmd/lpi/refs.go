@@ -93,11 +93,7 @@ func (rf *refFlags) resolveOrBootstrap(learnKey string) (m *estimate.Model, boot
 		m, err = rf.resolve()
 		return m, false, err
 	}
-	m, err = estimate.OpenStore(rf.db).Load(learnKey)
-	if os.IsNotExist(err) {
-		return estimate.NewModel(learnKey), true, nil
-	}
-	return m, false, err
+	return estimate.OpenStore(rf.db).LoadOrNew(learnKey)
 }
 
 // bootstrapNotice tells the user why no progress
@@ -133,10 +129,7 @@ func availableKeys(db string) string {
 
 // loadOrCreate returns the model stored for key, or
 func loadOrCreate(db, key string) (*estimate.Model, error) {
-	m, err := estimate.OpenStore(db).Load(key)
-	if os.IsNotExist(err) {
-		return estimate.NewModel(key), nil
-	}
+	m, _, err := estimate.OpenStore(db).LoadOrNew(key)
 	return m, err
 }
 

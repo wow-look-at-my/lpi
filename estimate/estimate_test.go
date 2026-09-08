@@ -216,9 +216,19 @@ func TestStoreRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, models, 1)
 
+	back, fresh, err := store.LoadOrNew(m.Key())
+	require.NoError(t, err)
+	assert.False(t, fresh)
+	assert.Equal(t, m.Units(), back.Units())
+
 	require.NoError(t, store.Remove(m.Key()))
 	_, err = store.Load(m.Key())
 	assert.ErrorIs(t, err, fs.ErrNotExist, "a key never learned reads as not-found")
+
+	empty, fresh, err := store.LoadOrNew("never-learned")
+	require.NoError(t, err)
+	assert.True(t, fresh, "a key with no model starts one instead of failing")
+	assert.Zero(t, empty.Units())
 }
 
 func TestStoreOnAMissingDirectoryIsEmpty(t *testing.T) {

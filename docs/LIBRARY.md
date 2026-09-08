@@ -54,10 +54,10 @@ estimate.OpenStore("").Save(m) // "" means the CLI's own database
 ## Estimate a live run
 
 ```go
-m, err := estimate.OpenStore("").Load("nightly-import")
-if errors.Is(err, fs.ErrNotExist) {
-	// Never recorded. Record this run as the baseline instead of estimating it.
-}
+// LoadOrNew hands back an empty model for a key nobody has learned yet, so a
+// first run records its baseline instead of failing. Load reports fs.ErrNotExist.
+m, fresh, err := estimate.OpenStore("").LoadOrNew("nightly-import")
+_ = fresh // an empty model reads as confidence "none" until a run is added
 est := estimate.NewEstimator(m)
 for ev := range events {
 	est.Observe(estimate.TokenOf(ev.Step), ev.At)
