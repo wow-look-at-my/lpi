@@ -86,8 +86,14 @@ func (e *Estimator) Observe(line string, at time.Time) {
 	if norm == "" {
 		return
 	}
+	e.ObserveToken(fingerprint.Sum64(norm), at)
+}
+
+// ObserveToken feeds an already-hashed token, stamped with at. An unset at
+// leaves the clock alone. This is the seam the token API estimates through: a
+// stream of opaque tokens never passes through line normalization.
+func (e *Estimator) ObserveToken(fp uint64, at time.Time) {
 	e.current++
-	fp := fingerprint.Sum64(norm)
 	occs, known := e.m.Expect[fp]
 	switch {
 	case !known:

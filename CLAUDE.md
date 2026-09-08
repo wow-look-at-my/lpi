@@ -18,6 +18,11 @@ Autorelease publishes to the buildhost project `lpi` (`brew install pazer/build/
 ## Layout
 
 ```
+estimate/              the public library, package estimate (doc.go, token.go,
+                       record.go, format.go, capture.go, model.go, estimate.go,
+                       match.go, store.go). cmd/lpi and internal/eval are
+                       built on it: it is the estimation path, not a facade
+                       beside one.
 cmd/lpi/               cobra CLI: one command per file, self-registering via
                        init(); refs.go holds the shared --ref/--key/--db
                        resolution, the pinned JSON snapshot type, and the
@@ -72,6 +77,18 @@ testdata/demo/         two complete fake cmake builds + a ~55% partial run,
 - Durable capture: every learning run/pipe streams consumed lines to <db>/pending/<key>-<stamp>-<pid>.log (format in docs/DESIGN.md). Learned -> file removed. Failed (non-zero exit, signal, read error, save error) -> file kept, and the exact "lpi learn --key K --db D <path>" recovery command printed. Under 2 nonempty lines -> nothing recoverable, removed. Capture-file problems only warn ("capture file disabled") and never fail the run. `lpi learn` finds capture files by their header, keeps their per-line timing, and removes ingested ones under the current db's pending/ dir after a successful save.
 - Live-learning bootstrap: a learn-target key with no model yet is NOT an error for `run --learn`/`pipe --learn-key`. That holds when no `--ref` is given and any `--key` equals the learn key. The run records a baseline against the empty model. It shows progress 0, confidence "none", and a "recording baseline" status line. pipe's `--learn-key` doubles as the reference key when `--key`/`--ref` are absent.
 - Magic default mode: `Execute` routes os.Args through `routeArgs`. A first arg that is no flag, no `--`, and no registered subcommand/alias (nor help/completion/__complete*) becomes `auto -- <args>`. `lpi -- CMD` is the escape for shadowed names. `auto` (only flag: --db) feeds every stored model to progress.Chooser. The Chooser locks by cumulative match rate and is always learning. Its thresholds are lockMinLines=12, earlyLockRate=0.8, lockWindowLines=32, lockRate=0.5, and switchMargin=0.15 hysteresis. Exit 0 merges into the locked pattern at final rate >= mergeRate=0.6, adding the command line to Model.Invocations (shown by `model list`'s LABEL column). Else it records a new pattern under model.AutoKey(run), `auto.<hash16>` in the reserved auto namespace, hashed from the fingerprint multiset. An existing file under that id means same content, so it merges. A clean run with under 2 nonempty lines learns nothing and is NOT an error. The capture is discarded, one "nothing to learn" notice line prints, and the exit code stays the child's 0. Failure semantics are unchanged from run --learn. Nothing is merged. The capture is kept under the fitted pattern's key when the fit was solid, else under the content id. Under 2 nonempty lines discards it. The exit code propagates.
+
+## Library API (estimate/)
+
+- `github.com/wow-look-at-my/lpi/estimate` is the importable surface. The repo root holds no Go files, so the module path itself is not a package.
+- The CLI consumes it. cmd/lpi imports internal/ only for render, tailer and eval, and internal/eval takes estimate's own types. So a library change that breaks the estimator breaks the CLI's tests, which is the point.
+- `timeparse.Stamper` is the single clock of a line stream: parse, carry over an unstamped line, clamp a backwards one. The digester, the eval replay and the CLI's lineFeeder all stamp through it. `estimate.Stamper`/`NewStamper` expose it. Nothing may hand-roll that rule again. A replay is scored against a digest of the same log. The two must agree exactly.
+- `timeparse.DetectLines` and `estimate.NewScanner`/`Scanner` are the other shared pieces: the sample size a detector wants, and the long-line-safe line splitter.
+- The public surface is tokens, not lines, and it is generic over the caller's value type. A `Tokenizer[T] func(T) (Token, bool)` reduces that value: `Identifiers` for a value that is already an id, `TokenOfLine` for raw log text. `Recorder[T]` -> `*Run` -> `Model` -> `Estimator[T]`/`Matcher[T]`, with `Store` over the CLI's own database. The CLI is the `[string]` instantiation with `TokenOfLine`. Depth: docs/LIBRARY.md.
+- The token seams into the internals are `model.Digester.Token`, `progress.Estimator.ObserveToken` and `progress.Chooser.ObserveToken`. Each takes a hash the generic layer already computed.
+- `Run` and `Estimate` are aliases of `model.Run` and `progress.Snapshot`, so there is no second copy of either to keep in sync. `Model` wraps `*model.Model` for a smaller accessor surface.
+- estimate_test.go is an EXTERNAL test package (`package estimate_test`), which is what proves the API works without internal access.
+- Doc comments here obey the org's ste-lint: no numerals or number words, and a comment no longer than the code it documents (about 120 chars for a one-line method). Depth belongs in docs/LIBRARY.md, not in the comment. The same rule is why example_test.go's `// Output:` prints grades, never figures.
 
 ## Testing seams (package vars)
 

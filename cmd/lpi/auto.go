@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/wow-look-at-my/lpi/internal/model"
-	"github.com/wow-look-at-my/lpi/internal/progress"
+	"github.com/wow-look-at-my/lpi/estimate"
 	"github.com/wow-look-at-my/lpi/internal/render"
 )
 
@@ -48,15 +48,15 @@ explicit form 'lpi -- CMD [ARGS...]'.`,
 			return errors.New("no command given after '--'")
 		}
 		errW := cmd.ErrOrStderr()
-		cands, err := loadCandidates(errW, autoOpts.db)
+		models, err := loadCandidates(errW, autoOpts.db)
 		if err != nil {
 			return err
 		}
-		ch := progress.NewChooser(cands)
+		ch := estimate.NewMatcher(estimate.TokenOfLine, models...)
 		r := render.New(errW)
 		lv := &liveRun{est: ch, r: r, msg: renderNotify(r)}
 		source := sourceName("auto", args)
-		lv.dig = model.NewDigester(source, nil)
+		lv.dig = estimate.NewRecorder(source, estimate.TokenOfLine)
 		lv.capture = newCapture(lv.msg, autoOpts.db, "auto", source)
 
 		exitCode, err := lv.execute(cmd, args)
@@ -67,7 +67,7 @@ explicit form 'lpi -- CMD [ARGS...]'.`,
 			return err
 		}
 
-		final := lv.est.Snapshot()
+		final := lv.est.Estimate()
 		lv.r.Close(final)
 		fmt.Fprint(errW, render.Summary(final))
 		if err := finishAutoLearn(errW, lv.msg, autoOpts.db, args, exitCode, ch, lv.dig, lv.capture); err != nil {
@@ -81,40 +81,34 @@ explicit form 'lpi -- CMD [ARGS...]'.`,
 }
 
 // loadCandidates offers every stored model to the
-func loadCandidates(warnW io.Writer, db string) ([]progress.Candidate, error) {
-	entries, err := os.ReadDir(db)
-	if os.IsNotExist(err) {
-		return nil, nil
-	}
+func loadCandidates(warnW io.Writer, db string) ([]*estimate.Model, error) {
+	store := estimate.OpenStore(db)
+	keys, err := store.Keys()
 	if err != nil {
 		return nil, err
 	}
-	var cands []progress.Candidate
-	for _, e := range entries {
-		name, ok := strings.CutSuffix(e.Name(), ".lpi")
-		if !ok || e.IsDir() {
-			continue
-		}
-		m, err := model.Load(model.PathForKey(db, name))
+	var models []*estimate.Model
+	for _, name := range keys {
+		m, err := store.Load(name)
 		if err != nil {
-			fmt.Fprintf(warnW, "warning: skipping model %s: %v\n", e.Name(), err)
+			fmt.Fprintf(warnW, "warning: skipping model %s: %v\n", filepath.Base(store.Path(name)), err)
 			continue
 		}
-		cands = append(cands, progress.Candidate{Key: name, Label: m.DisplayLabel(), Model: m})
+		models = append(models, m)
 	}
-	return cands, nil
+	return models, nil
 }
 
 // autoRecoveryKey is the key a kept capture should
-func autoRecoveryKey(ch *progress.Chooser, run *model.Run) string {
+func autoRecoveryKey(ch *estimate.Matcher[string], run *estimate.Run) string {
 	if key, _, ok := ch.MergeTarget(); ok {
 		return key
 	}
-	return model.AutoKey(run)
+	return estimate.ContentKey(run)
 }
 
 // keepAutoCapture keeps the capture file with
-func keepAutoCapture(msg notify, ch *progress.Chooser, dig *model.Digester, capture *model.CaptureWriter, db string) {
+func keepAutoCapture(msg notify, ch *estimate.Matcher[string], dig *estimate.Recorder[string], capture *estimate.Capture, db string) {
 	run, err := dig.Finish()
 	if err != nil {
 		capture.Discard()
@@ -124,7 +118,7 @@ func keepAutoCapture(msg notify, ch *progress.Chooser, dig *model.Digester, capt
 }
 
 // finishAutoLearn completes the always-learning
-func finishAutoLearn(errW io.Writer, msg notify, db string, args []string, exitCode int, ch *progress.Chooser, dig *model.Digester, capture *model.CaptureWriter) error {
+func finishAutoLearn(errW io.Writer, msg notify, db string, args []string, exitCode int, ch *estimate.Matcher[string], dig *estimate.Recorder[string], capture *estimate.Capture) error {
 	if exitCode != 0 {
 		fmt.Fprintf(errW, "exit status %d -- run not learned\n", exitCode)
 		keepAutoCapture(msg, ch, dig, capture, db)
@@ -139,27 +133,18 @@ func finishAutoLearn(errW io.Writer, msg notify, db string, args []string, exitC
 	}
 	invocation := strings.Join(args, " ")
 	if key, _, ok := ch.MergeTarget(); ok {
-		if err := learnRun(errW, db, key, run, invocation); err != nil {
-			keepCapture(msg, capture, db, key)
-			return err
-		}
-		capture.Discard()
-		return nil
+		return learnCapturedRun(errW, msg, capture, db, key, run, invocation)
 	}
-	id := model.AutoKey(run)
-	if _, err := os.Stat(model.PathForKey(db, id)); err == nil {
+	store := estimate.OpenStore(db)
+	id := estimate.ContentKey(run)
+	if _, err := os.Stat(store.Path(id)); err == nil {
 		// The id is a content hash: an existing file means
-		if err := learnRun(errW, db, id, run, invocation); err != nil {
-			keepCapture(msg, capture, db, id)
-			return err
-		}
-		capture.Discard()
-		return nil
+		return learnCapturedRun(errW, msg, capture, db, id, run, invocation)
 	}
-	m := model.New(id)
-	m.AddInvocation(invocation)
-	m.AddRun(run)
-	if err := m.Save(model.PathForKey(db, id)); err != nil {
+	m := estimate.NewModel(id)
+	m.AddLabel(invocation)
+	m.Add(run)
+	if err := store.Save(m); err != nil {
 		keepCapture(msg, capture, db, id)
 		return err
 	}
@@ -171,6 +156,6 @@ func finishAutoLearn(errW io.Writer, msg notify, db string, args []string, exitC
 }
 
 func init() {
-	autoCmd.Flags().StringVar(&autoOpts.db, "db", model.DefaultDir(), "model database directory")
+	autoCmd.Flags().StringVar(&autoOpts.db, "db", estimate.DefaultDir(), "model database directory")
 	rootCmd.AddCommand(autoCmd)
 }

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 )
 
 // currentVersion is the on-disk model format version
@@ -93,9 +95,32 @@ func DefaultDir() string {
 	return filepath.Join(home, ".cache", "log-progress-indicator")
 }
 
+// Keys lists the model keys stored in dir, sorted. A directory that does not
+// exist holds no models, which is not an error.
+func Keys(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var keys []string
+	for _, e := range entries {
+		if name, ok := strings.CutSuffix(e.Name(), ext); ok && !e.IsDir() {
+			keys = append(keys, name)
+		}
+	}
+	slices.Sort(keys)
+	return keys, nil
+}
+
+// ext is the file extension of a stored model
+const ext = ".lpi"
+
 // PathForKey maps a model key to its file path
 func PathForKey(dir, key string) string {
-	return filepath.Join(dir, sanitizeKey(key)+".lpi")
+	return filepath.Join(dir, sanitizeKey(key)+ext)
 }
 
 // sanitizeKey maps a model key to a safe file-name

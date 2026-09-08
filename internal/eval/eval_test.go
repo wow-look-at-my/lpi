@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/wow-look-at-my/lpi/internal/model"
+	"github.com/wow-look-at-my/lpi/estimate"
 )
 
 var base = time.Date(2026, 7, 2, 10, 0, 0, 0, time.UTC)
@@ -34,7 +34,7 @@ func writeLog(t *testing.T, name string, lines int, gap time.Duration) string {
 // target digests a log the way the eval command does.
 func target(t *testing.T, path string) Target {
 	t.Helper()
-	run, err := model.DigestFileWith(path, nil)
+	run, err := estimate.RecordFileWith(path, nil)
 	require.NoError(t, err)
 	return Target{Path: path, Run: run}
 }
@@ -100,8 +100,8 @@ func TestScoreUntimedLogFallsBackToLineCount(t *testing.T) {
 func TestScoreAgainstStoredModel(t *testing.T) {
 	a := writeLog(t, "a.log", 40, 10*time.Second)
 	b := writeLog(t, "b.log", 40, 10*time.Second)
-	m := model.New("stored")
-	m.AddRun(target(t, a).Run)
+	m := estimate.NewModel("stored")
+	m.Add(target(t, a).Run)
 
 	results, err := Against(m, []Target{target(t, b)}, nil)
 	require.NoError(t, err)
@@ -114,8 +114,8 @@ func TestScoreAgainstStoredModel(t *testing.T) {
 func TestScoreSlowerRunIsBehindTheReference(t *testing.T) {
 	fast := writeLog(t, "fast.log", 40, 10*time.Second)
 	slow := writeLog(t, "slow.log", 40, 20*time.Second)
-	m := model.New("stored")
-	m.AddRun(target(t, fast).Run)
+	m := estimate.NewModel("stored")
+	m.Add(target(t, fast).Run)
 
 	results, err := Against(m, []Target{target(t, slow)}, nil)
 	require.NoError(t, err)
@@ -131,8 +131,8 @@ func TestScoreSlowerRunIsBehindTheReference(t *testing.T) {
 func TestETAErrorOfTheRunIsNotDominatedByTheLastSeconds(t *testing.T) {
 	fast := writeLog(t, "fast.log", 40, 10*time.Second)
 	slow := writeLog(t, "slow.log", 40, 20*time.Second)
-	m := model.New("stored")
-	m.AddRun(target(t, fast).Run)
+	m := estimate.NewModel("stored")
+	m.Add(target(t, fast).Run)
 
 	results, err := Against(m, []Target{target(t, slow)}, nil)
 	require.NoError(t, err)
@@ -143,13 +143,13 @@ func TestETAErrorOfTheRunIsNotDominatedByTheLastSeconds(t *testing.T) {
 }
 
 func TestScoreRejectsShortAndMissingInput(t *testing.T) {
-	_, err := Score(model.New("m"), Target{Path: "nope.log"}, nil)
+	_, err := Score(estimate.NewModel("m"), Target{Path: "nope.log"}, nil)
 	assert.ErrorContains(t, err, "no digest")
 
 	a := writeLog(t, "a.log", 40, 10*time.Second)
 	tg := target(t, a)
 	tg.Path = filepath.Join(t.TempDir(), "gone.log")
-	_, err = Score(model.New("m"), tg, nil)
+	_, err = Score(estimate.NewModel("m"), tg, nil)
 	assert.ErrorContains(t, err, "gone.log")
 
 	_, err = LeaveOneOut(nil, nil)

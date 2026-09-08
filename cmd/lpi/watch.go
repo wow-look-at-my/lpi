@@ -12,10 +12,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/wow-look-at-my/lpi/internal/progress"
+	"github.com/wow-look-at-my/lpi/estimate"
 	"github.com/wow-look-at-my/lpi/internal/render"
 	"github.com/wow-look-at-my/lpi/internal/tailer"
-	"github.com/wow-look-at-my/lpi/internal/timeparse"
 )
 
 // newSignalContext is a seam so tests can
@@ -60,10 +59,10 @@ Ctrl-C to get a final summary.`,
 		go func() { tailErr <- tl.Run(ctx, lines) }()
 
 		w := &watcher{
-			est:        progress.NewEstimator(m),
+			est:        estimate.NewEstimator(m, estimate.TokenOfLine),
 			r:          render.New(cmd.ErrOrStderr()),
 			jsonStream: watchOpts.jsonStream,
-			format:     format,
+			det:        estimate.NewDetector(format),
 		}
 		// NDJSON snapshots are coordinated like child
 		w.jsonW = w.r.Passthrough(cmd.OutOrStdout(), &w.mu)
@@ -81,14 +80,13 @@ Ctrl-C to get a final summary.`,
 // watcher holds the live state of watch invocation
 type watcher struct {
 	mu         sync.Mutex
-	est        *progress.Estimator
+	est        *estimate.Estimator[string]
 	feeder     *lineFeeder
 	r          *render.Renderer
 	jsonW      io.Writer
 	jsonStream bool
-	pending    []string // lines buffered until the time source is decided
-	// format pins the stamp reader; nil leaves the
-	format *timeparse.Format
+	// det buffers the opening lines until the time source is decided
+	det *estimate.Detector
 }
 
 // loop consumes line batches and ticks until the
@@ -105,7 +103,7 @@ func (w *watcher) loop(lines <-chan string) {
 			w.update()
 		case <-ticker.C:
 			w.mu.Lock()
-			if w.feeder == nil && len(w.pending) > 0 {
+			if w.feeder == nil && w.det.Buffered() > 0 {
 				// The initial burst has settled: commit to a time
 				w.decideLocked()
 			}
@@ -138,9 +136,11 @@ func (w *watcher) handleBatch(batch []string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.feeder == nil {
-		w.pending = append(w.pending, batch...)
-		// A pinned format needs no sample, so the batch
-		if w.format != nil || len(w.pending) >= detectLines {
+		ready := false
+		for _, ln := range batch {
+			ready = w.det.Add(ln)
+		}
+		if ready {
 			w.decideLocked()
 		}
 		return
@@ -150,23 +150,20 @@ func (w *watcher) handleBatch(batch []string) {
 	}
 }
 
-// decideLocked picks the time source from the
+// decideLocked commits to a time source and feeds it what the Detector held.
+// No format detected means the log carries no clock, so the wall clock runs.
 func (w *watcher) decideLocked() {
-	format := w.format
-	if format == nil {
-		format = timeparse.Detect(w.pending)
-	}
-	w.feeder = &lineFeeder{est: w.est, format: format, wall: format == nil}
-	for _, ln := range w.pending {
+	format, sample := w.det.Decide()
+	w.feeder = newLineFeeder(w.est, format, format == nil)
+	for _, ln := range sample {
 		w.feeder.feed(ln)
 	}
-	w.pending = nil
 }
 
 // update repaints the status line and, when
 func (w *watcher) update() {
 	w.mu.Lock()
-	s := w.est.Snapshot()
+	s := w.est.Estimate()
 	w.mu.Unlock()
 	w.r.Update(s)
 	if w.jsonStream {
@@ -177,10 +174,10 @@ func (w *watcher) update() {
 // finish flushes any undecided buffer and prints
 func (w *watcher) finish(cmd *cobra.Command) {
 	w.mu.Lock()
-	if w.feeder == nil && len(w.pending) > 0 {
+	if w.feeder == nil && w.det.Buffered() > 0 {
 		w.decideLocked()
 	}
-	final := w.est.Snapshot()
+	final := w.est.Estimate()
 	w.mu.Unlock()
 	w.r.Close(final)
 	fmt.Fprint(cmd.ErrOrStderr(), render.Summary(final))

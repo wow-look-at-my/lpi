@@ -164,6 +164,36 @@ Failed runs are deliberately NOT merged automatically. A truncated log corrupts 
 
 ## Package reference
 
+### estimate
+
+The public library, `github.com/wow-look-at-my/lpi/estimate`. Its subject is a stream of tokens, not a log. It is generic over the caller's own value type. A `Tokenizer[T]` reduces that value to a `Token`: `Identifiers` for a value that is already an id, `TokenOfLine` for raw log text. `cmd/lpi` and `internal/eval` are built on it, so the estimation path a library caller gets is the one the CLI runs. What stays internal is what the CLI alone needs: rendering, tailing, line scanning, and the backtester. Full guide: [LIBRARY.md](LIBRARY.md).
+
+```go
+    type Token uint64
+    type Tokenizer[T any] func(T) (Token, bool)
+    func Identifiers[T ~string](v T) (Token, bool)  // a value that is an id
+    func TokenOfLine(line string) (Token, bool)     // raw log text
+    func TokenOf(s string) Token
+    type Recorder[T any] struct{ ... }  // Observe(T, time) -> Finish()
+    type Model struct{ ... }      // Add(*Run), Save, Label, Units, RefDuration
+    type Estimator[T any] struct{ ... } // Observe(T, time)/Tick -> Estimate()
+    type Matcher[T any] struct{ ... }   // many models: Locked, Best, MergeTarget
+    type Store struct{ ... }      // Keys, Load, LoadOrNew, Save, Models, Remove
+    type Capture struct{ ... }    // Add/Close/Discard, and PendingDir
+    type Sink[T ~string] struct{ ... }  // Obs/Rec/Cap: Observe feeds all three
+    type Observer[T any] interface{ ... } // Estimator and Matcher satisfy it
+    type Stamper = timeparse.Stamper   // NewStamper, DetectLines
+    type Scanner = linescan.Scanner    // NewScanner
+    type Run = model.Run
+    type Estimate = progress.Snapshot
+    type TimeFormat = timeparse.Format // CompileFormat, DetectFormat
+    func RecordFile/RecordFileWith/RecordReader/ReplayFile
+```
+
+The token seams the facade needs are `model.Digester.Token`, `progress.Estimator.ObserveToken` and `progress.Chooser.ObserveToken`. Each takes a hash the caller already holds. The line-taking methods normalize, then call the token method. So both paths share the whole algorithm.
+
+`Stamper` is the shared clock, and it matters more than it looks. Turning lines into times serves digesting a reference run, replaying one for eval, and following a live one. A replay is scored against a digest of the same log. So a separate implementation in any of them is a scoring bug waiting to happen. There used to be three. `timeparse.Stamper` is the single one now, and `DetectLines` is the sample size they all read.
+
 ### internal/fingerprint
 
 ```go
@@ -243,6 +273,7 @@ A regex naming none of the known groups is rejected, so a typo fails loudly inst
     func NewDigester(source string, format *timeparse.Format) *Digester
     func (d *Digester) Line(text string)
     func (d *Digester) LineAt(text string, at time.Time)
+    func (d *Digester) Token(fp uint64, at time.Time) // no normalization
     func (d *Digester) Finish() (*Run, error) // error if < 2 nonempty lines
     func DigestReader(r io.Reader, source string, format *timeparse.Format) (*Run, error)
     func DigestFile(path string) (*Run, error)
@@ -268,6 +299,7 @@ A regex naming none of the known groups is rejected, so a typo fails loudly inst
     func Load(path string) (*Model, error)
     func DefaultDir() string
     func PathForKey(dir, key string) string
+    func Keys(dir string) ([]string, error) // sorted; a missing dir has none
     func PendingDir(db string) string // <db>/pending, the capture-file dir
     type CaptureWriter struct{ ... }  // nil-safe methods; see "Capture durability"
     func NewCaptureWriter(db, key, source string) (*CaptureWriter, error)
@@ -306,6 +338,7 @@ Persistence: `Save` writes a gzip-compressed gob envelope `{Version: 1, Key, Run
     type Estimator struct{ ... }
     func NewEstimator(m *model.Model) *Estimator
     func (e *Estimator) Observe(line string, at time.Time) // at zero if unknown
+    func (e *Estimator) ObserveToken(fp uint64, at time.Time) // no normalization
     func (e *Estimator) Tick(at time.Time) // advance clock without a line
     func (e *Estimator) Snapshot() Snapshot
     type Snapshot struct {
@@ -335,6 +368,7 @@ Persistence: `Save` writes a gzip-compressed gob envelope `{Version: 1, Key, Run
     type Chooser struct{ ... } // see "Automatic mode"
     func NewChooser(cands []Candidate) *Chooser
     func (c *Chooser) Observe(line string, at time.Time)
+    func (c *Chooser) ObserveToken(fp uint64, at time.Time)
     func (c *Chooser) Tick(at time.Time)
     func (c *Chooser) Snapshot() Snapshot
     func (c *Chooser) Locked() (key, label string, ok bool)

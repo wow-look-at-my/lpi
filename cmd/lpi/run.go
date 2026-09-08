@@ -14,9 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/wow-look-at-my/lpi/internal/linescan"
-	"github.com/wow-look-at-my/lpi/internal/model"
-	"github.com/wow-look-at-my/lpi/internal/progress"
+	"github.com/wow-look-at-my/lpi/estimate"
 	"github.com/wow-look-at-my/lpi/internal/render"
 )
 
@@ -66,7 +64,7 @@ yet) and the next invocation gets a real estimate. With a --ref, a missing
 			return errors.New("--learn requires --key (the model to save the run into)")
 		}
 		var (
-			m         *model.Model
+			m         *estimate.Model
 			bootstrap bool
 			err       error
 		)
@@ -84,10 +82,10 @@ yet) and the next invocation gets a real estimate. With a --ref, a missing
 			bootstrapNotice(errW, runOpts.rf.key)
 		}
 		r := render.New(errW)
-		lv := &liveRun{est: progress.NewEstimator(m), r: r, msg: renderNotify(r)}
+		lv := &liveRun{est: estimate.NewEstimator(m, estimate.TokenOfLine), r: r, msg: renderNotify(r)}
 		if learning {
 			source := sourceName("run", args)
-			lv.dig = model.NewDigester(source, nil)
+			lv.dig = estimate.NewRecorder(source, estimate.TokenOfLine)
 			lv.capture = newCapture(lv.msg, runOpts.rf.db, runOpts.rf.key, source)
 		}
 		exitCode, err := lv.execute(cmd, args)
@@ -100,7 +98,7 @@ yet) and the next invocation gets a real estimate. With a --ref, a missing
 			return err
 		}
 
-		final := lv.est.Snapshot()
+		final := lv.est.Estimate()
 		lv.r.Close(final)
 		fmt.Fprint(errW, render.Summary(final))
 		if lv.dig != nil {
@@ -123,35 +121,27 @@ func (lv *liveRun) finishLearn(errW io.Writer, exitCode int, args []string) erro
 		keepOrDiscardCapture(lv.msg, lv.dig, lv.capture, db, key)
 		return nil
 	}
-	run, err := lv.dig.Finish()
+	run, err := finishCapturedRun(lv.dig, lv.capture)
 	if err != nil {
-		// The only Finish failure is nonempty lines
-		lv.capture.Discard()
-		return fmt.Errorf("run not learned: %w", err)
-	}
-	if err := learnRun(errW, db, key, run, strings.Join(args, " ")); err != nil {
-		keepCapture(lv.msg, lv.capture, db, key)
 		return err
 	}
-	lv.capture.Discard()
-	return nil
-}
-
-// feeder is the estimator-shaped dependency of
-type feeder interface {
-	Observe(string, time.Time)
-	Tick(time.Time)
-	Snapshot() progress.Snapshot
+	return learnCapturedRun(errW, lv.msg, lv.capture, db, key, run, strings.Join(args, " "))
 }
 
 // liveRun is the shared live state of run invocation
 type liveRun struct {
 	mu      sync.Mutex
-	est     feeder
-	dig     *model.Digester
-	capture *model.CaptureWriter
+	est     estimate.Observer[string]
+	dig     *estimate.Recorder[string]
+	capture *estimate.Capture
 	r       *render.Renderer
 	msg     notify
+}
+
+// sink is what every consumed line goes to: the estimate, the digest being
+// learned, and the capture file behind it.
+func (lv *liveRun) sink() *estimate.Sink[string] {
+	return &estimate.Sink[string]{Obs: lv.est, Rec: lv.dig, Cap: lv.capture}
 }
 
 // execute spawns the child and pumps its output
@@ -206,7 +196,7 @@ func (lv *liveRun) execute(cmd *cobra.Command, args []string) (int, error) {
 			case <-ticker.C:
 				lv.mu.Lock()
 				lv.est.Tick(time.Now())
-				lv.r.Update(lv.est.Snapshot())
+				lv.r.Update(lv.est.Estimate())
 				lv.mu.Unlock()
 			}
 		}
@@ -242,18 +232,14 @@ func childExitCode(ee *exec.ExitError) int {
 
 // consume forwards child stream byte-faithfully
 func (lv *liveRun) consume(pipe io.Reader, passthrough io.Writer) {
-	sc := linescan.NewScanner(io.TeeReader(pipe, passthrough))
+	sc := estimate.NewScanner(io.TeeReader(pipe, passthrough))
+	sink := lv.sink()
 	for sc.Scan() {
-		now := time.Now()
 		lv.mu.Lock()
-		lv.est.Observe(sc.Text(), now)
-		if lv.dig != nil {
-			lv.dig.LineAt(sc.Text(), now)
-			if err := lv.capture.Add(sc.Text(), now); err != nil {
-				lv.msg("warning: capture file disabled: %v", err)
-			}
+		if err := sink.Observe(sc.Text(), time.Now()); err != nil {
+			lv.msg("warning: capture file disabled: %v", err)
 		}
-		lv.r.Update(lv.est.Snapshot())
+		lv.r.Update(lv.est.Estimate())
 		lv.mu.Unlock()
 	}
 }

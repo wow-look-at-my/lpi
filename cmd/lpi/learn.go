@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/wow-look-at-my/lpi/internal/model"
+	"github.com/wow-look-at-my/lpi/estimate"
 	"github.com/wow-look-at-my/lpi/internal/render"
 )
 
@@ -23,7 +23,7 @@ var learnCmd = &cobra.Command{
 	Short: "Digest completed run logs into a named model",
 	Long: `Learn digests one or more logs of COMPLETED runs and stores them
 under a model key. Later invocations add runs to the same key (the oldest
-runs are evicted beyond ` + fmt.Sprint(model.MaxRuns) + `); --replace starts
+runs are evicted beyond ` + fmt.Sprint(estimate.MaxRuns) + `); --replace starts
 the key from scratch instead. Gzipped logs are handled transparently, as are
 the capture files a failed 'lpi run --learn' or 'lpi pipe --learn-key' keeps
 under <db>/pending/ -- they replay with the exact per-line times of the
@@ -42,7 +42,7 @@ previous line's time, so a mix of stamped and unstamped lines is fine.`,
 			return errors.New("--key is required")
 		}
 		db := learnOpts.rf.db
-		m := model.New(key)
+		m := estimate.NewModel(key)
 		if !learnOpts.replace {
 			var err error
 			if m, err = loadOrCreate(db, key); err != nil {
@@ -55,20 +55,21 @@ previous line's time, so a mix of stamped and unstamped lines is fine.`,
 		}
 		out := cmd.OutOrStdout()
 		for _, path := range args {
-			run, err := model.DigestFileWith(path, format.Clone())
+			run, err := estimate.RecordFileWith(path, format.Clone())
 			if err != nil {
 				return fmt.Errorf("digest %s: %w", path, err)
 			}
-			m.AddRun(run)
+			m.Add(run)
 			fmt.Fprintf(out, "learned %s: %d lines, %s%s, %d unique fingerprints\n",
 				path, run.Lines, runDuration(run), timeFormatNote(run), len(run.Occ))
 		}
-		dest := model.PathForKey(db, key)
-		if err := m.Save(dest); err != nil {
+		store := estimate.OpenStore(db)
+		dest := store.Path(key)
+		if err := store.Save(m); err != nil {
 			return err
 		}
 		fmt.Fprintf(out, "model %q: %d runs, %d units%s -> %s\n",
-			key, len(m.Runs), m.TotalUnits, modelDuration(m), dest)
+			key, len(m.Runs()), m.Units(), modelDuration(m), dest)
 		removePendingCaptures(out, db, args)
 		return nil
 	},
@@ -76,7 +77,7 @@ previous line's time, so a mix of stamped and unstamped lines is fine.`,
 
 // removePendingCaptures deletes ingested files that
 func removePendingCaptures(w io.Writer, db string, paths []string) {
-	pending, err := filepath.Abs(model.PendingDir(db))
+	pending, err := filepath.Abs(estimate.PendingDir(db))
 	if err != nil {
 		return
 	}
@@ -92,25 +93,25 @@ func removePendingCaptures(w io.Writer, db string, paths []string) {
 }
 
 // timeFormatNote names the stamp reader a digest
-func timeFormatNote(r *model.Run) string {
+func timeFormatNote(r *estimate.Run) string {
 	if r.TimeFormat == "" {
 		return ""
 	}
 	return " (" + r.TimeFormat + ")"
 }
 
-func runDuration(r *model.Run) string {
+func runDuration(r *estimate.Run) string {
 	if !r.HasTimes {
 		return "no timestamps"
 	}
 	return render.Duration(r.Duration)
 }
 
-func modelDuration(m *model.Model) string {
-	if !m.HasTimes {
+func modelDuration(m *estimate.Model) string {
+	if !m.HasTimes() {
 		return ", no timing data"
 	}
-	return " over " + render.Duration(m.RefDuration)
+	return " over " + render.Duration(m.RefDuration())
 }
 
 func init() {

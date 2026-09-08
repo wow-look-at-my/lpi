@@ -6,10 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/wow-look-at-my/lpi/internal/linescan"
-	"github.com/wow-look-at-my/lpi/internal/progress"
+	"github.com/wow-look-at-my/lpi/estimate"
 	"github.com/wow-look-at-my/lpi/internal/render"
-	"github.com/wow-look-at-my/lpi/internal/timeparse"
 )
 
 var analyzeOpts struct {
@@ -47,11 +45,11 @@ groups) instead of detecting it.`,
 		if err != nil {
 			return err
 		}
-		est := progress.NewEstimator(m)
+		est := estimate.NewEstimator(m, estimate.TokenOfLine)
 		if err := analyzeReader(r, est, format); err != nil {
 			return err
 		}
-		s := est.Snapshot()
+		s := est.Estimate()
 		if analyzeOpts.json {
 			return writeJSONSnapshot(cmd.OutOrStdout(), s)
 		}
@@ -61,16 +59,14 @@ groups) instead of detecting it.`,
 }
 
 // analyzeReader buffers the lines for timestamp
-func analyzeReader(r io.Reader, est *progress.Estimator, format *timeparse.Format) error {
-	sc := linescan.NewScanner(r)
-	var sample []string
-	for len(sample) < detectLines && format == nil && sc.Scan() {
-		sample = append(sample, sc.Text())
+func analyzeReader(r io.Reader, est *estimate.Estimator[string], format *estimate.TimeFormat) error {
+	sc := estimate.NewScanner(r)
+	det := estimate.NewDetector(format)
+	for !det.Ready() && sc.Scan() {
+		det.Add(sc.Text())
 	}
-	if format == nil {
-		format = timeparse.Detect(sample)
-	}
-	feeder := &lineFeeder{est: est, format: format}
+	format, sample := det.Decide()
+	feeder := newLineFeeder(est, format, false)
 	for _, ln := range sample {
 		feeder.feed(ln)
 	}

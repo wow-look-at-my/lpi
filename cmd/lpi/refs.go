@@ -6,20 +6,14 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/wow-look-at-my/lpi/internal/model"
-	"github.com/wow-look-at-my/lpi/internal/progress"
+	"github.com/wow-look-at-my/lpi/estimate"
 	"github.com/wow-look-at-my/lpi/internal/render"
-	"github.com/wow-look-at-my/lpi/internal/timeparse"
 )
-
-// detectLines is how many leading lines the live
-const detectLines = 300
 
 // tickInterval is how often the live modes advance
 var tickInterval = 500 * time.Millisecond
@@ -36,22 +30,22 @@ type refFlags struct {
 // addModelFlags registers --key and --db
 func addModelFlags(cmd *cobra.Command, rf *refFlags) {
 	cmd.Flags().StringVar(&rf.key, "key", "", "name of a learned model in the model database")
-	cmd.Flags().StringVar(&rf.db, "db", model.DefaultDir(), "model database directory")
+	cmd.Flags().StringVar(&rf.db, "db", estimate.DefaultDir(), "model database directory")
 }
 
 // addTimeFlags registers the timestamp-reading
 func addTimeFlags(cmd *cobra.Command, rf *refFlags) {
 	cmd.Flags().StringVar(&rf.format, "format", "",
 		"how to read each line's timestamp: auto (default), a builtin ("+
-			strings.Join(timeparse.Names(), ", ")+"), or a regex with named groups ("+
-			strings.Join(timeparse.Groups(), ", ")+")")
+			strings.Join(estimate.FormatNames(), ", ")+"), or a regex with named groups ("+
+			strings.Join(estimate.FormatGroups(), ", ")+")")
 	cmd.Flags().StringVar(&rf.layout, "time-layout", "",
 		"Go reference layout for the regex 'time' group, or for the start of each line")
 }
 
 // timeFormat compiles --format/--time-layout
-func (rf *refFlags) timeFormat() (*timeparse.Format, error) {
-	return timeparse.Compile(rf.format, rf.layout)
+func (rf *refFlags) timeFormat() (*estimate.TimeFormat, error) {
+	return estimate.CompileFormat(rf.format, rf.layout)
 }
 
 // addRefFlags registers --ref on top of the model
@@ -62,14 +56,14 @@ func addRefFlags(cmd *cobra.Command, rf *refFlags) {
 }
 
 // resolve builds the reference model: --key loads
-func (rf *refFlags) resolve() (*model.Model, error) {
+func (rf *refFlags) resolve() (*estimate.Model, error) {
 	if rf.key == "" && len(rf.refs) == 0 {
 		return nil, errors.New("no reference given: use --key NAME and/or --ref FILE")
 	}
-	var m *model.Model
+	var m *estimate.Model
 	if rf.key != "" {
 		var err error
-		if m, err = model.Load(model.PathForKey(rf.db, rf.key)); err != nil {
+		if m, err = estimate.OpenStore(rf.db).Load(rf.key); err != nil {
 			if os.IsNotExist(err) {
 				return nil, fmt.Errorf("no model for key %q in %s (%s)",
 					rf.key, rf.db, availableKeys(rf.db))
@@ -77,33 +71,29 @@ func (rf *refFlags) resolve() (*model.Model, error) {
 			return nil, err
 		}
 	} else {
-		m = model.New("adhoc")
+		m = estimate.NewModel("adhoc")
 	}
 	format, err := rf.timeFormat()
 	if err != nil {
 		return nil, err
 	}
 	for _, ref := range rf.refs {
-		run, err := model.DigestFileWith(ref, format.Clone())
+		run, err := estimate.RecordFileWith(ref, format.Clone())
 		if err != nil {
 			return nil, fmt.Errorf("digest %s: %w", ref, err)
 		}
-		m.AddRun(run)
+		m.Add(run)
 	}
 	return m, nil
 }
 
 // resolveOrBootstrap resolves the reference model
-func (rf *refFlags) resolveOrBootstrap(learnKey string) (m *model.Model, bootstrap bool, err error) {
+func (rf *refFlags) resolveOrBootstrap(learnKey string) (m *estimate.Model, bootstrap bool, err error) {
 	if len(rf.refs) > 0 || (rf.key != "" && rf.key != learnKey) {
 		m, err = rf.resolve()
 		return m, false, err
 	}
-	m, err = model.Load(model.PathForKey(rf.db, learnKey))
-	if os.IsNotExist(err) {
-		return model.New(learnKey), true, nil
-	}
-	return m, false, err
+	return estimate.OpenStore(rf.db).LoadOrNew(learnKey)
 }
 
 // bootstrapNotice tells the user why no progress
@@ -130,51 +120,61 @@ func renderNotify(r *render.Renderer) notify {
 
 // availableKeys names the models present in db, for
 func availableKeys(db string) string {
-	entries, err := os.ReadDir(db)
-	var keys []string
-	if err == nil {
-		for _, e := range entries {
-			if name, ok := strings.CutSuffix(e.Name(), ".lpi"); ok && !e.IsDir() {
-				keys = append(keys, name)
-			}
-		}
-	}
-	if len(keys) == 0 {
+	keys, err := estimate.OpenStore(db).Keys()
+	if err != nil || len(keys) == 0 {
 		return "no models learned yet"
 	}
-	sort.Strings(keys)
 	return "available: " + strings.Join(keys, ", ")
 }
 
 // loadOrCreate returns the model stored for key, or
-func loadOrCreate(db, key string) (*model.Model, error) {
-	m, err := model.Load(model.PathForKey(db, key))
-	if os.IsNotExist(err) {
-		return model.New(key), nil
-	}
+func loadOrCreate(db, key string) (*estimate.Model, error) {
+	m, _, err := estimate.OpenStore(db).LoadOrNew(key)
 	return m, err
 }
 
 // learnRun adds run to key's stored model, records
-func learnRun(w io.Writer, db, key string, run *model.Run, invocation string) error {
+func learnRun(w io.Writer, db, key string, run *estimate.Run, invocation string) error {
 	m, err := loadOrCreate(db, key)
 	if err != nil {
 		return err
 	}
-	m.AddRun(run)
-	m.AddInvocation(invocation)
-	path := model.PathForKey(db, key)
-	if err := m.Save(path); err != nil {
+	m.Add(run)
+	m.AddLabel(invocation)
+	store := estimate.OpenStore(db)
+	if err := store.Save(m); err != nil {
 		return err
 	}
 	fmt.Fprintf(w, "learned run (%d lines, %s) into key %q (%d runs)\n",
-		run.Lines, render.Duration(run.Duration), key, len(m.Runs))
+		run.Lines, render.Duration(run.Duration), key, len(m.Runs()))
 	return nil
 }
 
+// learnCapturedRun learns run under key and drops its capture. A save that
+// fails keeps the capture instead, with the command that recovers it.
+func learnCapturedRun(w io.Writer, msg notify, cw *estimate.Capture, db, key string, run *estimate.Run, invocation string) error {
+	if err := learnRun(w, db, key, run, invocation); err != nil {
+		keepCapture(msg, cw, db, key)
+		return err
+	}
+	cw.Discard()
+	return nil
+}
+
+// finishCapturedRun digests what was consumed. Too little to learn discards
+// the capture: there is nothing in it to recover.
+func finishCapturedRun(rec *estimate.Recorder[string], cw *estimate.Capture) (*estimate.Run, error) {
+	run, err := rec.Finish()
+	if err != nil {
+		cw.Discard()
+		return nil, fmt.Errorf("run not learned: %w", err)
+	}
+	return run, nil
+}
+
 // newCapture opens the durable capture file for a
-func newCapture(msg notify, db, key, source string) *model.CaptureWriter {
-	cw, err := model.NewCaptureWriter(db, key, source)
+func newCapture(msg notify, db, key, source string) *estimate.Capture {
+	cw, err := estimate.NewCapture(db, key, source)
 	if err != nil {
 		msg("warning: capture file disabled: %v", err)
 		return nil
@@ -183,7 +183,7 @@ func newCapture(msg notify, db, key, source string) *model.CaptureWriter {
 }
 
 // keepCapture closes the capture file, leaves it in
-func keepCapture(msg notify, cw *model.CaptureWriter, db, key string) {
+func keepCapture(msg notify, cw *estimate.Capture, db, key string) {
 	if cw == nil {
 		return
 	}
@@ -193,8 +193,8 @@ func keepCapture(msg notify, cw *model.CaptureWriter, db, key string) {
 }
 
 // keepOrDiscardCapture keeps the capture file with
-func keepOrDiscardCapture(msg notify, dig *model.Digester, cw *model.CaptureWriter, db, key string) {
-	if _, err := dig.Finish(); err != nil {
+func keepOrDiscardCapture(msg notify, rec *estimate.Recorder[string], cw *estimate.Capture, db, key string) {
+	if _, err := rec.Finish(); err != nil {
 		cw.Discard()
 		return
 	}
@@ -226,7 +226,7 @@ type jsonSnapshot struct {
 }
 
 // writeJSONSnapshot writes s as JSON object
-func writeJSONSnapshot(w io.Writer, s progress.Snapshot) error {
+func writeJSONSnapshot(w io.Writer, s estimate.Estimate) error {
 	js := jsonSnapshot{
 		Progress:           s.Progress,
 		UnitsDone:          s.UnitsDone,
@@ -261,22 +261,22 @@ func writeJSONSnapshot(w io.Writer, s progress.Snapshot) error {
 
 // lineFeeder stamps live lines with a time and
 type lineFeeder struct {
-	est    *progress.Estimator
-	format *timeparse.Format
-	wall   bool
-	last   time.Time
+	est   *estimate.Estimator[string]
+	stamp *estimate.Stamper
+	wall  bool
+}
+
+// newLineFeeder reads the log's own clock through format. wall takes the time
+// from the machine instead, which only a live stream may do: a file on disk
+// was written when it was written.
+func newLineFeeder(est *estimate.Estimator[string], format *estimate.TimeFormat, wall bool) *lineFeeder {
+	return &lineFeeder{est: est, stamp: estimate.NewStamper(format), wall: wall}
 }
 
 func (f *lineFeeder) feed(line string) {
-	var at time.Time
-	switch {
-	case f.wall:
-		at = time.Now()
-	case f.format != nil:
-		if t, ok := f.format.Parse(line); ok {
-			f.last = t
-		}
-		at = f.last
+	at := time.Now()
+	if !f.wall {
+		at, _, _ = f.stamp.Stamp(line)
 	}
 	f.est.Observe(line, at)
 }

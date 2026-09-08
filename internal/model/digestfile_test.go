@@ -10,6 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/wow-look-at-my/lpi/internal/timeparse"
 )
 
 const isoLog = `2026-07-02T10:00:00 alpha start
@@ -72,7 +74,7 @@ func TestDigestFileNoTimestamps(t *testing.T) {
 
 func TestDigestFileLongerThanSample(t *testing.T) {
 	var sb strings.Builder
-	for i := 0; i < detectLines+50; i++ {
+	for i := 0; i < timeparse.DetectLines+50; i++ {
 		sb.WriteString("2026-07-02T10:00:00 step ")
 		sb.WriteString(strings.Repeat("x", i%7+1)) // vary the text a little
 		sb.WriteString("\n")
@@ -80,7 +82,7 @@ func TestDigestFileLongerThanSample(t *testing.T) {
 	path := writeFile(t, "big.log", sb.String())
 	run, err := DigestFile(path)
 	require.NoError(t, err)
-	assert.Equal(t, detectLines+50, run.Lines, "lines beyond the sample are digested too")
+	assert.Equal(t, timeparse.DetectLines+50, run.Lines, "lines beyond the sample are digested too")
 }
 
 func TestDigestFileErrors(t *testing.T) {
