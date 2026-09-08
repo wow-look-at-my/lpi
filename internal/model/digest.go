@@ -45,27 +45,31 @@ type rawOcc struct {
 type Digester struct {
 	source string
 	format *timeparse.Format
+	stamp  *timeparse.Stamper
 	occ    map[uint64][]rawOcc
 	count  int
 	first  time.Time
-	prev   time.Time
 	haveT  bool
 }
 
 // NewDigester returns a Digester for run
 func NewDigester(source string, format *timeparse.Format) *Digester {
-	return &Digester{source: source, format: format, occ: make(map[uint64][]rawOcc)}
+	return &Digester{
+		source: source,
+		format: format,
+		stamp:  timeparse.NewStamper(format),
+		occ:    make(map[uint64][]rawOcc),
+	}
 }
 
 // Line feeds raw log line, parsing its timestamp
 func (d *Digester) Line(text string) {
-	var at time.Time
-	if d.format != nil {
-		if t, ok := d.format.Parse(text); ok {
-			at = t
-		}
+	norm := fingerprint.Normalize(text)
+	if norm == "" {
+		return
 	}
-	d.add(text, at)
+	eff, gap, timed := d.stamp.Stamp(text)
+	d.record(fingerprint.Sum64(norm), eff, gap, timed)
 }
 
 // LineAt feeds raw log line stamped with an
@@ -81,33 +85,20 @@ func (d *Digester) add(text string, at time.Time) {
 	d.Token(fingerprint.Sum64(norm), at)
 }
 
-// Token feeds an already-hashed token, stamped with at. An unset at means the
-// token carries no time of its own. This is the seam the token API digests
-// through: a stream of opaque tokens never passes through line normalization.
+// Token feeds an already-hashed token stamped with at: the seam the token API
+// digests through, skipping line normalization.
 func (d *Digester) Token(fp uint64, at time.Time) {
-	ro := rawOcc{idx: d.count}
+	eff, gap, timed := d.stamp.At(at)
+	d.record(fp, eff, gap, timed)
+}
+
+// record files the occurrence. A token that arrives before any stamp stays
+// untimed, which pins it to the run start.
+func (d *Digester) record(fp uint64, eff time.Time, gap time.Duration, timed bool) {
+	ro := rawOcc{idx: d.count, at: eff, gap: gap, timed: timed}
 	d.count++
-	switch {
-	case !at.IsZero():
-		eff := at
-		if d.haveT {
-			if eff.Before(d.prev) {
-				eff = d.prev // clamp: the effective clock never moves backwards
-			}
-			ro.gap = eff.Sub(d.prev)
-		} else {
-			d.first = eff
-			d.haveT = true
-		}
-		d.prev = eff
-		ro.at = eff
-		ro.timed = true
-	case d.haveT:
-		// No timestamp on this line: carry the previous
-		ro.at = d.prev
-		ro.timed = true
-	default:
-		// Before the timestamp: pinned to the run start at
+	if timed && !d.haveT {
+		d.first, d.haveT = eff, true
 	}
 	d.occ[fp] = append(d.occ[fp], ro)
 }
@@ -123,7 +114,7 @@ func (d *Digester) Finish() (*Run, error) {
 	}
 	var dur time.Duration
 	if d.haveT {
-		dur = d.prev.Sub(d.first)
+		dur = d.stamp.Last().Sub(d.first)
 	}
 	if dur > 0 {
 		d.finishTimed(run, dur)
@@ -179,9 +170,6 @@ func DigestReader(r io.Reader, source string, format *timeparse.Format) (*Run, e
 	}
 	return d.Finish()
 }
-
-// detectLines is how many leading lines DigestFile
-const detectLines = 300
 
 // DigestFile digests a log file into a Run
 func DigestFile(path string) (*Run, error) { return DigestFileWith(path, nil) }
@@ -243,7 +231,7 @@ func readFile(path string, format *timeparse.Format, fn func(*timeparse.Format, 
 			return label, sc.Err()
 		}
 		sample = append(sample, sc.Text())
-		for len(sample) < detectLines && format == nil && sc.Scan() {
+		for len(sample) < timeparse.DetectLines && format == nil && sc.Scan() {
 			sample = append(sample, sc.Text())
 		}
 	}

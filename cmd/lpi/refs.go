@@ -15,9 +15,6 @@ import (
 	"github.com/wow-look-at-my/lpi/internal/render"
 )
 
-// detectLines is how many leading lines the live
-const detectLines = 300
-
 // tickInterval is how often the live modes advance
 var tickInterval = 500 * time.Millisecond
 
@@ -249,22 +246,22 @@ func writeJSONSnapshot(w io.Writer, s estimate.Estimate) error {
 
 // lineFeeder stamps live lines with a time and
 type lineFeeder struct {
-	est    *estimate.Estimator
-	format *estimate.TimeFormat
-	wall   bool
-	last   time.Time
+	est   *estimate.Estimator
+	stamp *estimate.Stamper
+	wall  bool
+}
+
+// newLineFeeder reads the log's own clock through format. wall takes the time
+// from the machine instead, which only a live stream may do: a file on disk
+// was written when it was written.
+func newLineFeeder(est *estimate.Estimator, format *estimate.TimeFormat, wall bool) *lineFeeder {
+	return &lineFeeder{est: est, stamp: estimate.NewStamper(format), wall: wall}
 }
 
 func (f *lineFeeder) feed(line string) {
-	var at time.Time
-	switch {
-	case f.wall:
-		at = time.Now()
-	case f.format != nil:
-		if t, ok := f.format.Parse(line); ok {
-			f.last = t
-		}
-		at = f.last
+	at := time.Now()
+	if !f.wall {
+		at, _, _ = f.stamp.Stamp(line)
 	}
 	f.est.ObserveLine(line, at)
 }

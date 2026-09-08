@@ -148,6 +148,7 @@ func Score(m *estimate.Model, t Target, format *estimate.TimeFormat) (*Result, e
 			RefRuns:  len(m.Runs()),
 		},
 		est:      estimate.NewEstimator(m),
+		stamp:    estimate.NewStamper(nil),
 		run:      t.Run,
 		lastLine: t.Run.Lines - 1,
 	}
@@ -165,8 +166,8 @@ type scorer struct {
 	lastLine int
 
 	idx      int
+	stamp    *estimate.Stamper
 	first    time.Time
-	prev     time.Time
 	haveT    bool
 	errs     []float64
 	sumErr   float64
@@ -214,28 +215,21 @@ func (s *scorer) line(text string, at time.Time) {
 	s.last = snap
 }
 
-// clock mirrors the digester's effective clock, so the replay sees the same
-// times the reference digest was built from.
+// clock runs the replay through the same Stamper the digest was built with, so
+// the replay sees the exact times the reference recorded.
 func (s *scorer) clock(at time.Time) time.Time {
-	if at.IsZero() {
-		return s.prev // carry the previous line's time, unset before any stamp
+	eff, _, timed := s.stamp.At(at)
+	if timed && !s.haveT {
+		s.first, s.haveT = eff, true
 	}
-	if s.haveT && at.Before(s.prev) {
-		at = s.prev
-	}
-	if !s.haveT {
-		s.first = at
-		s.haveT = true
-	}
-	s.prev = at
-	return at
+	return eff
 }
 
 // truth is how much of the run is really done at this line: its share of the
 // run's own clock when the log is timed, else its share of the line count.
 func (s *scorer) truth() float64 {
 	if s.run.HasTimes && s.run.Duration > 0 && s.haveT {
-		return clamp01(float64(s.prev.Sub(s.first)) / float64(s.run.Duration))
+		return clamp01(float64(s.stamp.Last().Sub(s.first)) / float64(s.run.Duration))
 	}
 	if s.lastLine <= 0 {
 		return 1
@@ -244,7 +238,7 @@ func (s *scorer) truth() float64 {
 }
 
 func (s *scorer) trueLeft() time.Duration {
-	left := s.run.Duration - s.prev.Sub(s.first)
+	left := s.run.Duration - s.stamp.Last().Sub(s.first)
 	if left < 0 {
 		return 0
 	}

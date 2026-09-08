@@ -15,7 +15,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/wow-look-at-my/lpi/estimate"
-	"github.com/wow-look-at-my/lpi/internal/linescan"
 	"github.com/wow-look-at-my/lpi/internal/render"
 )
 
@@ -241,7 +240,7 @@ func childExitCode(ee *exec.ExitError) int {
 
 // consume forwards child stream byte-faithfully
 func (lv *liveRun) consume(pipe io.Reader, passthrough io.Writer) {
-	sc := linescan.NewScanner(io.TeeReader(pipe, passthrough))
+	sc := estimate.NewScanner(io.TeeReader(pipe, passthrough))
 	for sc.Scan() {
 		now := time.Now()
 		lv.mu.Lock()

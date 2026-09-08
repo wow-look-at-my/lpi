@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/wow-look-at-my/lpi/estimate"
-	"github.com/wow-look-at-my/lpi/internal/linescan"
 	"github.com/wow-look-at-my/lpi/internal/render"
 )
 
@@ -92,7 +91,7 @@ from exit code 0.`,
 		if r != nil {
 			out = r.Passthrough(out, &st.mu)
 		}
-		sc := linescan.NewScanner(io.TeeReader(cmd.InOrStdin(), out))
+		sc := estimate.NewScanner(io.TeeReader(cmd.InOrStdin(), out))
 		for sc.Scan() {
 			now := time.Now()
 			st.mu.Lock()

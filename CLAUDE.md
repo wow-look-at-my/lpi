@@ -81,7 +81,9 @@ testdata/demo/         two complete fake cmake builds + a ~55% partial run,
 ## Library API (estimate/)
 
 - `github.com/wow-look-at-my/lpi/estimate` is the importable surface. The repo root holds no Go files, so the module path itself is not a package.
-- The CLI consumes it. cmd/lpi imports internal/ only for render, tailer, linescan and eval, and internal/eval takes estimate's own types. So a library change that breaks the estimator breaks the CLI's tests, which is the point.
+- The CLI consumes it. cmd/lpi imports internal/ only for render, tailer and eval, and internal/eval takes estimate's own types. So a library change that breaks the estimator breaks the CLI's tests, which is the point.
+- `timeparse.Stamper` is the single clock of a line stream: parse, carry over an unstamped line, clamp a backwards one. The digester, the eval replay and the CLI's lineFeeder all stamp through it. `estimate.Stamper`/`NewStamper` expose it. Nothing may hand-roll that rule again. A replay is scored against a digest of the same log. The two must agree exactly.
+- `timeparse.DetectLines` and `estimate.NewScanner`/`Scanner` are the other shared pieces: the sample size a detector wants, and the long-line-safe line splitter.
 - The public surface is tokens, not lines: `Token`/`TokenOf` hash an identifier as given, `TokenOfLine` normalizes log text first. `Recorder` -> `*Run` -> `Model` -> `Estimator`/`Matcher`, with `Store` over the CLI's own database. Depth: docs/LIBRARY.md.
 - The token seams into the internals are `model.Digester.Token`, `progress.Estimator.ObserveToken` and `progress.Chooser.ObserveToken`. The line methods normalize, then call them. `Chooser` normalizes once for every candidate.
 - `Run` and `Estimate` are aliases of `model.Run` and `progress.Snapshot`, so there is no second copy of either to keep in sync. `Model` wraps `*model.Model` for a smaller accessor surface.

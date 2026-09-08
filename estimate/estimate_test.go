@@ -338,6 +338,33 @@ func TestPinnedFormatReadsStampsNoDetectorKnows(t *testing.T) {
 	assert.NotEmpty(t, estimate.FormatGroups())
 }
 
+func TestStamperIsTheClockEveryPathShares(t *testing.T) {
+	format, err := estimate.CompileFormat("clock", "")
+	require.NoError(t, err)
+	s := estimate.NewStamper(format)
+	assert.Same(t, format, s.Format())
+
+	_, _, timed := s.Stamp("no stamp here")
+	assert.False(t, timed, "nothing has stamped the stream yet")
+
+	at, _, timed := s.Stamp("09:00:00 start")
+	require.True(t, timed)
+	assert.Equal(t, 9, at.Hour())
+
+	carried, gap, timed := s.Stamp("still working")
+	assert.True(t, timed, "an unstamped line carries the previous time")
+	assert.Equal(t, at, carried)
+	assert.Zero(t, gap)
+
+	back, gap, _ := s.Stamp("08:00:00 out of order")
+	assert.Equal(t, at, back, "the clock never moves backwards")
+	assert.Zero(t, gap)
+
+	on, gap, _ := s.Stamp("09:02:30 later")
+	assert.Equal(t, 150*time.Second, gap)
+	assert.Equal(t, on, s.Last())
+}
+
 func TestReplayFileScoresAFinishedLog(t *testing.T) {
 	log := filepath.Join(t.TempDir(), "run.log")
 	body := "09:00:00 start\n09:02:00 middle\n09:05:00 done\n"

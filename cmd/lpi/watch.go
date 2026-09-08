@@ -139,7 +139,7 @@ func (w *watcher) handleBatch(batch []string) {
 	if w.feeder == nil {
 		w.pending = append(w.pending, batch...)
 		// A pinned format needs no sample, so the batch
-		if w.format != nil || len(w.pending) >= detectLines {
+		if w.format != nil || len(w.pending) >= estimate.DetectLines {
 			w.decideLocked()
 		}
 		return
@@ -155,7 +155,7 @@ func (w *watcher) decideLocked() {
 	if format == nil {
 		format = estimate.DetectFormat(w.pending)
 	}
-	w.feeder = &lineFeeder{est: w.est, format: format, wall: format == nil}
+	w.feeder = newLineFeeder(w.est, format, format == nil)
 	for _, ln := range w.pending {
 		w.feeder.feed(ln)
 	}

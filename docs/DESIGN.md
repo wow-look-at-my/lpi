@@ -178,6 +178,8 @@ The public library, `github.com/wow-look-at-my/lpi/estimate`. Its subject is a s
     type Matcher struct{ ... }    // many models: Locked, Best, MergeTarget
     type Store struct{ ... }      // Keys, Load, Save, Models, Remove
     type Capture struct{ ... }    // Add/Close/Discard, and PendingDir
+    type Stamper = timeparse.Stamper   // NewStamper, DetectLines
+    type Scanner = linescan.Scanner    // NewScanner
     type Run = model.Run
     type Estimate = progress.Snapshot
     type TimeFormat = timeparse.Format // CompileFormat, DetectFormat
@@ -185,6 +187,8 @@ The public library, `github.com/wow-look-at-my/lpi/estimate`. Its subject is a s
 ```
 
 The token seams the facade needs are `model.Digester.Token`, `progress.Estimator.ObserveToken` and `progress.Chooser.ObserveToken`. Each takes a hash the caller already holds. The line-taking methods normalize, then call the token method. So both paths share the whole algorithm.
+
+`Stamper` is the shared clock, and it matters more than it looks. Turning lines into times serves digesting a reference run, replaying one for eval, and following a live one. A replay is scored against a digest of the same log. So a separate implementation in any of them is a scoring bug waiting to happen. There used to be three. `timeparse.Stamper` is the single one now, and `DetectLines` is the sample size they all read.
 
 ### internal/fingerprint
 

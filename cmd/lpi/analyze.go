@@ -7,7 +7,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/wow-look-at-my/lpi/estimate"
-	"github.com/wow-look-at-my/lpi/internal/linescan"
 	"github.com/wow-look-at-my/lpi/internal/render"
 )
 
@@ -61,15 +60,15 @@ groups) instead of detecting it.`,
 
 // analyzeReader buffers the lines for timestamp
 func analyzeReader(r io.Reader, est *estimate.Estimator, format *estimate.TimeFormat) error {
-	sc := linescan.NewScanner(r)
+	sc := estimate.NewScanner(r)
 	var sample []string
-	for len(sample) < detectLines && format == nil && sc.Scan() {
+	for len(sample) < estimate.DetectLines && format == nil && sc.Scan() {
 		sample = append(sample, sc.Text())
 	}
 	if format == nil {
 		format = estimate.DetectFormat(sample)
 	}
-	feeder := &lineFeeder{est: est, format: format}
+	feeder := newLineFeeder(est, format, false)
 	for _, ln := range sample {
 		feeder.feed(ln)
 	}
