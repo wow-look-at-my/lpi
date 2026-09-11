@@ -31,7 +31,7 @@ lpi make -j8
 That is the whole interface: no key to invent, no flag to remember. The first run ends with `recorded new pattern "make -j8"`. Every later run shows a live status line on stderr:
 
 ```
-[==========>           ] 46.3%  units 65/108 (60.2%)  elapsed 3m05s  eta ~3m35s  pace 1.27x  match 98%  ref make -j8
+[==========>           ] 46.3%  units 65/108 (60.2%)  elapsed 3m05s  eta ~3m35s  pace 1.27x slower  match 98%  ref make -j8
 ```
 
 lpi identifies the run by its OUTPUT, not by the command line. `make`, `make -j8`, and `nice make` all land on the same pattern while they produce the same build. The same `make` in two different projects is two different patterns. Failed runs never merge into a pattern: the captured log is kept and the recovery command printed.
@@ -87,7 +87,7 @@ kubectl logs job/migrate | lpi analyze --key migrate -
 Progress:    46.3% (time-weighted)
 Units:       65 / 108 reference lines matched (60.2%)
 Elapsed:     3m05s
-ETA:         ~3m35s (pace 1.27x vs reference)
+ETA:         ~3m35s (1.27x slower than the reference)
 Confidence:  high (98.5% of lines matched; 1 novel, 0 overflow)
 Reference:   108 units over 5m14s
 ```
@@ -153,10 +153,10 @@ verdict: excellent -- progress is off by 1.3% on average, and the ETA by 2% of t
 `--detail` prints what lpi said at each tenth of the run, next to what was really true at that moment:
 
 ```
-      true     said    error       eta true left    pace
-       11%     9.9%    -1.1%     4m46s     4m35s   1.10x
-       51%    48.1%    -3.4%     2m47s     2m30s   1.05x
-       99%    97.1%    -2.2%        9s        2s   1.01x
+      true     said    error       eta true left slowdown
+       11%     9.9%    -1.1%     4m46s     4m35s    1.10x
+       51%    48.1%    -3.4%     2m47s     2m30s    1.05x
+       99%    97.1%    -2.2%        9s        2s    1.01x
 ```
 
 `--key NAME` scores the logs against a model you already learned, a real holdout. `--learn` adds them to that key once the scoring is done, and `--json` prints every number for a script to read. Without `--learn`, eval writes nothing to the database.
@@ -223,7 +223,7 @@ Timestamps are optional, and `estimate.TokenOfLine` is the tokenizer for raw log
 2. **Occurrence matching, order-free.** The reference is a multiset: the k-th time a fingerprint appears live matches the k-th time it appeared in the reference. No sequence alignment, so parallel, interleaved, out-of-order logs match fine. "Units" are reference lines matched.
 3. **Time-gap weighting.** Each reference line owns the time gap since the previous line of that run, as a fraction of the whole run. Progress is the sum of matched weights. The line that ends a 30-second silent link step owns that step, so the bar stalls there instead of racing to 99%.
 4. **Merging runs.** Up to 8 reference runs merge per key. Expected counts take the upper median across runs, so one aborted or incremental run cannot drop lines. Times and weights average in seconds rather than in each run's own fractions, so a log cut short cannot inflate its share of the work. Each line's weight scales by how many of the runs actually print it: one run's quirks never become work the next run owes. Adding a reference must help or do nothing, and `lpi eval` is how that is checked.
-5. **ETA.** pace = elapsed / (progress x reference-duration). ETA = remaining-weight x reference-duration x pace. The pace correction shrinks toward the reference in proportion to the progress behind it. A slow opening minute is a poor guide to the hour after it, and un-shrunk it stretched early ETAs by a third. Without usable timestamps, lines weigh equally and the ETA assumes reference pace, or is omitted.
+5. **ETA.** pace = elapsed / (matched-weight x reference-duration): how long you took against how long the reference took over the same work. The bare ratio reads backwards. So the status line spells the direction out: `2.40x faster` or `1.07x slower`. Retired work leaves both sides of the ratio. Skipping half a build then reads as the speed you ran the other half at. ETA = remaining-weight x reference-duration x pace. The pace correction shrinks toward the reference in proportion to the progress behind it. A slow opening minute is a poor guide to the hour after it, and un-shrunk it stretched early ETAs by a third. Without usable timestamps, lines weigh equally and the ETA assumes reference pace, or is omitted.
 
 Confidence is the fraction of live lines that matched: >= 90% is `high`,
 >= 60% `medium`, else `low` -- novel lines (never seen in the reference) and
@@ -244,7 +244,7 @@ overflow lines (seen more often than expected) are counted separately.
 | `ref_duration_seconds` | float | merged reference run duration |
 | `eta_seconds` | float | seconds remaining; **absent when no ETA** |
 | `eta_kind` | string | `pace`, `ref-pace`, or `none` |
-| `pace` | float | current speed vs reference (>1 = slower); 0 if unknown |
+| `pace` | float | elapsed over the reference time for the work done (above one is slower); 0 if unknown |
 | `match_rate` | float 0..1 | fraction of live lines matched |
 | `confidence` | string | `high`, `medium`, `low`, or `none` |
 | `current_lines` / `matched_lines` / `novel_lines` / `overflow_lines` | int | line accounting |

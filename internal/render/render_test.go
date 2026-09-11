@@ -57,10 +57,25 @@ func TestDuration(t *testing.T) {
 	assert.Equal(t, "2h59m", Duration(2*time.Hour+59*time.Minute))
 }
 
+func TestPace(t *testing.T) {
+	t.Serial()
+	assert.Equal(t, "", Pace(0))
+	assert.Equal(t, "", Pace(-1))
+	assert.Equal(t, "on par", Pace(1))
+	assert.Equal(t, "on par", Pace(0.97))
+	assert.Equal(t, "on par", Pace(1.04))
+	assert.Equal(t, "1.07x slower", Pace(1.07))
+	assert.Equal(t, "2.50x slower", Pace(2.5))
+	assert.Equal(t, "2.00x faster", Pace(0.5))
+	assert.Equal(t, "4.00x faster", Pace(0.25))
+	assert.Equal(t, "on reference pace", paceSentence(1))
+	assert.Equal(t, "2.00x faster than the reference", paceSentence(0.5))
+}
+
 func TestStatusLineFull(t *testing.T) {
 	t.Serial()
 	want := "[========>             ] 38.4%  units 2451/5948 (41.2%)  " +
-		"elapsed 2m14s  eta ~3m35s  pace 1.07x  match 97%"
+		"elapsed 2m14s  eta ~3m35s  pace 1.07x slower  match 97%"
 	assert.Equal(t, want, StatusLine(fullSnap()))
 }
 
@@ -127,7 +142,7 @@ func TestStatusLineRefLabel(t *testing.T) {
 	s := fullSnap()
 	s.Label = "make -j8"
 	want := "[========>             ] 38.4%  units 2451/5948 (41.2%)  " +
-		"elapsed 2m14s  eta ~3m35s  pace 1.07x  match 97%  ref make -j8"
+		"elapsed 2m14s  eta ~3m35s  pace 1.07x slower  match 97%  ref make -j8"
 	assert.Equal(t, want, StatusLine(s))
 
 	s.Label = "cmake --build build --parallel everything"
@@ -142,7 +157,7 @@ func TestSummaryPatternLabel(t *testing.T) {
 	want := "Progress:    38.4% (time-weighted)\n" +
 		"Units:       2451 / 5948 reference lines matched (41.2%)\n" +
 		"Elapsed:     2m14s\n" +
-		"ETA:         ~3m35s (pace 1.07x vs reference)\n" +
+		"ETA:         ~3m35s (1.07x slower than the reference)\n" +
 		"Confidence:  high (97.2% of lines matched; 12 novel, 3 overflow)\n" +
 		"Reference:   5948 units over 5m50s\n" +
 		"Pattern:     make -j8\n"
@@ -169,7 +184,7 @@ func TestSummaryFull(t *testing.T) {
 	want := "Progress:    38.4% (time-weighted)\n" +
 		"Units:       2451 / 5948 reference lines matched (41.2%)\n" +
 		"Elapsed:     2m14s\n" +
-		"ETA:         ~3m35s (pace 1.07x vs reference)\n" +
+		"ETA:         ~3m35s (1.07x slower than the reference)\n" +
 		"Confidence:  high (97.2% of lines matched; 12 novel, 3 overflow)\n" +
 		"Reference:   5948 units over 5m50s\n"
 	assert.Equal(t, want, Summary(fullSnap()))
