@@ -221,7 +221,7 @@ func StatusLine(s progress.Snapshot) string {
 const paceEven = 0.05
 
 // Pace renders a pace ratio with the direction said out loud. The stored
-// ratio is elapsed over expected, so above one is slower.
+// ratio is elapsed over expected, so a bigger ratio is slower.
 func Pace(p float64) string {
 	if p <= 0 {
 		return ""

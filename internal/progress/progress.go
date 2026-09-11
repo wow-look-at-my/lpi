@@ -213,9 +213,7 @@ func (e *Estimator) Snapshot() Snapshot {
 // fillETA applies the ETA rules: a pace-adjusted
 func (e *Estimator) fillETA(s *Snapshot) {
 	ref := s.RefDuration.Seconds()
-	// Reference seconds for the work done and the work left. Progress is
-	// renormalized over retired work, so it is a share of what this run does,
-	// not a share of the reference clock, and it cannot stand in for either.
+	// Not Progress: it is renormalized over retired work. Depth: docs/DESIGN.md.
 	done := e.weightDone * ref
 	left := max(1-e.weightDone-e.skipped, 0) * ref
 	switch {

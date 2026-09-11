@@ -67,7 +67,7 @@ func TestETAPaceIgnoresRetiredWork(t *testing.T) {
 	lines := steps(80)
 	m := timedModel(t, lines, uniform(80, 10*time.Second))
 
-	// Half the reference, skipped in the middle, run at twice the reference
+	// Half the reference, skipped in the middle, run at double the reference rate
 	var run []string
 	run = append(run, lines[:20]...)
 	run = append(run, lines[60:]...)
