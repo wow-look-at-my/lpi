@@ -39,14 +39,14 @@ func Report(w io.Writer, rs []*Result, detail bool) {
 // writeCheckpoints prints what lpi would have told you as the run went by.
 func writeCheckpoints(w io.Writer, r *Result) {
 	fmt.Fprintf(w, "%s -- what lpi said as the run went by\n", r.Source)
-	fmt.Fprintf(w, "  %8s %8s %8s %9s %9s %7s\n", "true", "said", "error", "eta", "true left", "pace")
+	fmt.Fprintf(w, "  %8s %8s %8s %9s %9s %8s\n", "true", "said", "error", "eta", "true left", "slowdown")
 	for _, p := range r.Checkpoints {
 		eta, left := "-", "-"
 		if p.ETAKind != "none" && r.HasTimes {
 			eta = render.Duration(p.ETA)
 			left = render.Duration(p.TrueLeft)
 		}
-		fmt.Fprintf(w, "  %7.0f%% %7.1f%% %+7.1f%% %9s %9s %6.2fx\n",
+		fmt.Fprintf(w, "  %7.0f%% %7.1f%% %+7.1f%% %9s %9s %7.2fx\n",
 			p.Truth*100, p.Pred*100, p.Err()*100, eta, left, p.Pace)
 	}
 	fmt.Fprintln(w)

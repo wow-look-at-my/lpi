@@ -60,6 +60,32 @@ func TestETAPaceShrinksWithProgress(t *testing.T) {
 	assert.Less(t, early.PaceApplied, early.Pace)
 }
 
+// Retired work leaves the progress denominator, and progress is what the bar
+// reports. Pace is a different question -- elapsed against the reference time
+// for the work actually done -- so retiring must not touch it.
+func TestETAPaceIgnoresRetiredWork(t *testing.T) {
+	lines := steps(80)
+	m := timedModel(t, lines, uniform(80, 10*time.Second))
+
+	// Half the reference, skipped in the middle, run at double the reference rate
+	var run []string
+	run = append(run, lines[:20]...)
+	run = append(run, lines[60:]...)
+	e := NewEstimator(m)
+	for i, ln := range run {
+		e.Observe(ln, wallBase.Add(time.Duration(i)*5*time.Second))
+	}
+	s := e.Snapshot()
+
+	require.Equal(t, "pace", s.ETAKind)
+	require.Positive(t, s.Skipped, "the skipped stretch is retired")
+	t.Logf("progress %.3f, skipped %.3f, pace %.3f", s.Progress, s.Skipped, s.Pace)
+	assert.InDelta(t, 0.5, s.Pace, 0.1, "half the reference time for half the work")
+	assert.Greater(t, s.Pace, 0.35,
+		"dividing by the retired denominator would report this run twice as fast again")
+	assert.InDelta(t, 0.0, s.ETA.Seconds(), 1, "no work left is no time left")
+}
+
 func TestETAPaceAtCompletionIsZero(t *testing.T) {
 	e := paceEstimator(t)
 	for i, ln := range steps(12) {

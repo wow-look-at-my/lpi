@@ -208,13 +208,39 @@ func StatusLine(s progress.Snapshot) string {
 		parts = append(parts, "eta ~"+Duration(s.ETA))
 	}
 	if s.Pace != 0 {
-		parts = append(parts, fmt.Sprintf("pace %.2fx", s.Pace))
+		parts = append(parts, "pace "+Pace(s.Pace))
 	}
 	parts = append(parts, fmt.Sprintf("match %.0f%%", s.MatchRate*100))
 	if s.Label != "" {
 		parts = append(parts, "ref "+truncLabel(s.Label, statusLabelMax))
 	}
 	return strings.Join(parts, "  ")
+}
+
+// paceEven is the band around the reference pace that reads as neither
+const paceEven = 0.05
+
+// Pace renders a pace ratio with the direction said out loud. The stored
+// ratio is elapsed over expected, so a bigger ratio is slower.
+func Pace(p float64) string {
+	if p <= 0 {
+		return ""
+	}
+	if p > 1-paceEven && p < 1+paceEven {
+		return "on par"
+	}
+	if p < 1 {
+		return fmt.Sprintf("%.2fx faster", 1/p)
+	}
+	return fmt.Sprintf("%.2fx slower", p)
+}
+
+// paceSentence is the Pace phrase in the wider form the summary block uses.
+func paceSentence(p float64) string {
+	if p > 1-paceEven && p < 1+paceEven {
+		return "on reference pace"
+	}
+	return Pace(p) + " than the reference"
 }
 
 // truncLabel caps a pattern label at max bytes
@@ -251,7 +277,7 @@ func Summary(s progress.Snapshot) string {
 	}
 	switch s.ETAKind {
 	case "pace":
-		row("ETA", fmt.Sprintf("~%s (pace %.2fx vs reference)", Duration(s.ETA), s.Pace))
+		row("ETA", fmt.Sprintf("~%s (%s)", Duration(s.ETA), paceSentence(s.Pace)))
 	case "ref-pace":
 		row("ETA", fmt.Sprintf("~%s (assuming reference pace)", Duration(s.ETA)))
 	}

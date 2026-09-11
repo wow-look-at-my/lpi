@@ -213,16 +213,19 @@ func (e *Estimator) Snapshot() Snapshot {
 // fillETA applies the ETA rules: a pace-adjusted
 func (e *Estimator) fillETA(s *Snapshot) {
 	ref := s.RefDuration.Seconds()
+	// Not Progress: it is renormalized over retired work. Depth: docs/DESIGN.md.
+	done := e.weightDone * ref
+	left := max(1-e.weightDone-e.skipped, 0) * ref
 	switch {
-	case s.ElapsedKnown && s.Progress >= minPaceProgress && s.MatchedLines >= minPaceMatches && ref > 0:
-		s.Pace = s.Elapsed.Seconds() / (s.Progress * ref)
+	case s.ElapsedKnown && s.Progress >= minPaceProgress && s.MatchedLines >= minPaceMatches && done > 0:
+		s.Pace = s.Elapsed.Seconds() / done
 		// A pace from a sliver of the run counts only in proportion to that sliver.
 		s.PaceApplied = 1 + (s.Pace-1)*s.Progress
 		s.ETAKind = "pace"
-		s.ETA = time.Duration((1 - s.Progress) * ref * s.PaceApplied * float64(time.Second))
+		s.ETA = time.Duration(left * s.PaceApplied * float64(time.Second))
 	case !s.ElapsedKnown && ref > 0 && s.Progress >= minRefPaceProgress:
 		s.ETAKind = "ref-pace"
-		s.ETA = time.Duration((1 - s.Progress) * ref * float64(time.Second))
+		s.ETA = time.Duration(left * float64(time.Second))
 	}
 	if s.ETA < 0 {
 		s.ETA = 0
